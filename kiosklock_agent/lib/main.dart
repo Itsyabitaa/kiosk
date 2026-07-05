@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kiosklock_agent/features/enrollment/enrollment_repository.dart';
 
+import 'package:kiosklock_agent/core/kiosk_channel.dart';
 import 'package:kiosklock_agent/core/policy_sync_service.dart';
 import 'package:kiosklock_agent/core/secure_exit_manager.dart';
 import 'package:kiosklock_agent/features/browser/kiosk_browser_screen.dart';
