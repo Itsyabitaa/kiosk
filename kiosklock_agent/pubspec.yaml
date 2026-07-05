@@ -39,6 +39,10 @@ dependencies:
   web_socket_channel: ^3.0.3
   crypto: ^3.0.3
   webview_flutter: ^4.4.2
+  battery_plus: ^6.2.1
+  connectivity_plus: ^6.1.0
+  device_info_plus: ^11.2.0
+  package_info_plus: ^8.1.2
 
 dev_dependencies:
   flutter_test:
