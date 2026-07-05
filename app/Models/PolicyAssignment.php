@@ -13,6 +13,9 @@ class PolicyAssignment extends Model
         'device_id',
         'assigned_at',
         'status',
+        'rollout_id',
+        'previous_policy_id',
+        'applied_version',
     ];
 
     /**
