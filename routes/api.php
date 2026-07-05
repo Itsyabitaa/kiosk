@@ -33,3 +33,8 @@ Route::post('/devices/{id}/unlock', [DeviceEnrollmentController::class, 'deviceU
 Route::get('/devices/{id}/mdm/profile', [DeviceEnrollmentController::class, 'generateMdmProfile']);
 Route::get('/devices/{id}/mdm/commands', [DeviceEnrollmentController::class, 'getMdmCommands']);
 Route::post('/devices/{id}/mdm/commands/{commandId}/ack', [DeviceEnrollmentController::class, 'ackMdmCommand']);
+
+Route::post('/admin/devices/deployment-qr', [\App\Http\Controllers\DeviceDeploymentController::class, 'generateDeploymentQr'])->middleware('auth:api');
+Route::get('/devices/enroll-ios', [\App\Http\Controllers\DeviceDeploymentController::class, 'enrollIosDeepLink']);
+Route::post('/devices/{id}/reassign', [\App\Http\Controllers\DeviceDeploymentController::class, 'reassignPolicy']);
+
