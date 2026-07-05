@@ -290,5 +290,36 @@ class PolicyTest extends TestCase
             'device_id' => $this->deviceA->id,
             'status' => 'applied',
         ]);
+
+        // 6. Submit a device event (e.g. exit attempt)
+        $responseEvent = $this->withHeaders([
+            'Authorization' => "Bearer $deviceToken",
+        ])->postJson("/api/devices/{$this->deviceA->id}/events", [
+            'event_type' => 'exit_attempt',
+            'status' => 'failed',
+            'details' => ['pin_attempted' => '1234', 'reason' => 'invalid PIN'],
+        ]);
+
+        $responseEvent->assertStatus(201);
+        $responseEvent->assertJson([
+            'device_id' => $this->deviceA->id,
+            'event_type' => 'exit_attempt',
+            'status' => 'failed',
+        ]);
+
+        $this->assertDatabaseHas('device_events', [
+            'device_id' => $this->deviceA->id,
+            'event_type' => 'exit_attempt',
+            'status' => 'failed',
+        ]);
+
+        // 7. Get device details as Admin A (should include logged events)
+        auth('api')->login($this->adminA);
+        $responseDeviceDetails = $this->getJson("/api/admin/devices/{$this->deviceA->id}");
+        $responseDeviceDetails->assertStatus(200);
+        $responseDeviceDetails->assertJsonFragment([
+            'event_type' => 'exit_attempt',
+            'status' => 'failed',
+        ]);
     }
 }
