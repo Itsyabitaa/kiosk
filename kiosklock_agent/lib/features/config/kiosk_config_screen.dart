@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -16,7 +18,7 @@ class KioskConfigScreen extends StatefulWidget {
   State<KioskConfigScreen> createState() => _KioskConfigScreenState();
 }
 
-enum _LockMode { app, website }
+enum _LockMode { app, website, home }
 
 class _KioskConfigScreenState extends State<KioskConfigScreen> {
   _LockMode _mode = _LockMode.app;
@@ -30,6 +32,9 @@ class _KioskConfigScreenState extends State<KioskConfigScreen> {
   bool _saving = false;
   bool _allowSubdomains = false;
   String? _error;
+
+  /// Approved apps for the multi-app home launcher: each is `{package, label}`.
+  final List<Map<String, dynamic>> _homeApps = [];
 
   static const _appPresets = <String, String>{
     'This app (self)': 'com.kiosklock.kiosklock_agent',
@@ -58,6 +63,11 @@ class _KioskConfigScreenState extends State<KioskConfigScreen> {
         _domainsController.text =
             domains.map((d) => d.startsWith('*.') ? d.substring(2) : d).join(', ');
         _idleController.text = '${restrictions['idle_timeout_minutes'] ?? 5}';
+      } else if (type == 'multi_app') {
+        _mode = _LockMode.home;
+        final apps = (restrictions['apps'] as List?) ?? [];
+        _homeApps
+            .addAll(apps.map((e) => Map<String, dynamic>.from(e as Map)));
       } else {
         _mode = _LockMode.app;
         _packageController.text = target;
@@ -93,7 +103,20 @@ class _KioskConfigScreenState extends State<KioskConfigScreen> {
     try {
       Map<String, dynamic> policy;
 
-      if (_mode == _LockMode.app) {
+      if (_mode == _LockMode.home) {
+        if (_homeApps.isEmpty) {
+          throw Exception('Add at least one app to the home screen.');
+        }
+        policy = {
+          'id': 0,
+          'version': DateTime.now().millisecondsSinceEpoch,
+          'policy_type': 'multi_app',
+          'target': null,
+          'restrictions': <String, dynamic>{
+            'apps': _homeApps,
+          },
+        };
+      } else if (_mode == _LockMode.app) {
         final pkg = _packageController.text.trim();
         if (pkg.isEmpty) {
           throw Exception('Enter the app package name to lock to.');
@@ -157,9 +180,11 @@ class _KioskConfigScreenState extends State<KioskConfigScreen> {
       Navigator.of(context).pop();
       messenger.showSnackBar(
         SnackBar(
-          content: Text(_mode == _LockMode.app
-              ? 'Locked to app: ${_packageController.text.trim()}'
-              : 'Locked to website: ${_urlController.text.trim()}'),
+          content: Text(_mode == _LockMode.home
+              ? 'Kiosk home set with ${_homeApps.length} app(s).'
+              : _mode == _LockMode.app
+                  ? 'Locked to app: ${_packageController.text.trim()}'
+                  : 'Locked to website: ${_urlController.text.trim()}'),
         ),
       );
     } catch (e) {
@@ -284,20 +309,30 @@ class _KioskConfigScreenState extends State<KioskConfigScreen> {
             segments: const [
               ButtonSegment(
                 value: _LockMode.app,
-                icon: Icon(Icons.apps),
-                label: Text('Lock to App'),
+                icon: Icon(Icons.smartphone),
+                label: Text('App'),
               ),
               ButtonSegment(
                 value: _LockMode.website,
                 icon: Icon(Icons.public),
-                label: Text('Lock to Website'),
+                label: Text('Website'),
+              ),
+              ButtonSegment(
+                value: _LockMode.home,
+                icon: Icon(Icons.grid_view),
+                label: Text('Home'),
               ),
             ],
             selected: {_mode},
             onSelectionChanged: (s) => setState(() => _mode = s.first),
           ),
           const SizedBox(height: 20),
-          if (_mode == _LockMode.app) ..._buildAppFields() else ..._buildWebsiteFields(),
+          if (_mode == _LockMode.app)
+            ..._buildAppFields()
+          else if (_mode == _LockMode.website)
+            ..._buildWebsiteFields()
+          else
+            ..._buildHomeFields(),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(top: 16),
@@ -389,5 +424,189 @@ class _KioskConfigScreenState extends State<KioskConfigScreen> {
         ),
       ),
     ];
+  }
+
+  List<Widget> _buildHomeFields() {
+    return [
+      const Text(
+        'These apps appear on the kiosk home screen. The user can only open apps from this list; '
+        'everything else on the device stays hidden.',
+        style: TextStyle(fontSize: 13, color: Colors.black54),
+      ),
+      const SizedBox(height: 12),
+      OutlinedButton.icon(
+        onPressed: _pickApps,
+        icon: const Icon(Icons.add),
+        label: const Text('Add apps'),
+      ),
+      const SizedBox(height: 8),
+      if (_homeApps.isEmpty)
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Text('No apps added yet.', style: TextStyle(color: Colors.black45)),
+        )
+      else
+        ..._homeApps.map((app) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.android),
+              title: Text((app['label'] as String?)?.isNotEmpty == true
+                  ? app['label'] as String
+                  : app['package'] as String),
+              subtitle: Text(app['package'] as String),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => setState(() => _homeApps.remove(app)),
+              ),
+            )),
+    ];
+  }
+
+  Future<void> _pickApps() async {
+    final selectedPackages = _homeApps.map((a) => a['package'] as String).toSet();
+    final result = await showModalBottomSheet<List<Map<String, dynamic>>>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _AppPickerSheet(initiallySelected: selectedPackages),
+    );
+    if (result != null) {
+      setState(() {
+        _homeApps
+          ..clear()
+          ..addAll(result);
+      });
+    }
+  }
+}
+
+/// Bottom-sheet multi-select of installed launchable apps (icon + label + package).
+class _AppPickerSheet extends StatefulWidget {
+  final Set<String> initiallySelected;
+  const _AppPickerSheet({required this.initiallySelected});
+
+  @override
+  State<_AppPickerSheet> createState() => _AppPickerSheetState();
+}
+
+class _AppPickerSheetState extends State<_AppPickerSheet> {
+  List<Map<String, dynamic>> _apps = [];
+  final Map<String, Uint8List> _icons = {};
+  final Set<String> _selected = {};
+  bool _loading = true;
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _selected.addAll(widget.initiallySelected);
+    _load();
+  }
+
+  Future<void> _load() async {
+    final installed = await KioskChannel.getInstalledApps();
+    for (final app in installed) {
+      final pkg = app['package'] as String?;
+      final iconB64 = app['icon'] as String?;
+      if (pkg != null && iconB64 != null && iconB64.isNotEmpty) {
+        try {
+          _icons[pkg] = base64Decode(iconB64);
+        } catch (_) {}
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _apps = installed;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _apps.where((a) {
+      if (_query.isEmpty) return true;
+      final label = ((a['label'] as String?) ?? '').toLowerCase();
+      final pkg = ((a['package'] as String?) ?? '').toLowerCase();
+      final q = _query.toLowerCase();
+      return label.contains(q) || pkg.contains(q);
+    }).toList();
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.85,
+      maxChildSize: 0.95,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(width: 40, height: 4, color: Colors.black26),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Text('Select apps',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  FilledButton(
+                    onPressed: () {
+                      final chosen = _apps
+                          .where((a) => _selected.contains(a['package']))
+                          .map((a) => {
+                                'package': a['package'],
+                                'label': a['label'],
+                              })
+                          .toList();
+                      Navigator.of(context).pop(chosen);
+                    },
+                    child: Text('Done (${_selected.length})'),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(
+                onChanged: (v) => setState(() => _query = v),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: 'Search apps',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView.builder(
+                      controller: scrollController,
+                      itemCount: filtered.length,
+                      itemBuilder: (context, i) {
+                        final app = filtered[i];
+                        final pkg = app['package'] as String? ?? '';
+                        final icon = _icons[pkg];
+                        final checked = _selected.contains(pkg);
+                        return CheckboxListTile(
+                          value: checked,
+                          onChanged: (v) => setState(() {
+                            if (v == true) {
+                              _selected.add(pkg);
+                            } else {
+                              _selected.remove(pkg);
+                            }
+                          }),
+                          secondary: icon != null
+                              ? Image.memory(icon, width: 40, height: 40)
+                              : const Icon(Icons.android, size: 40),
+                          title: Text((app['label'] as String?) ?? pkg),
+                          subtitle: Text(pkg, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }

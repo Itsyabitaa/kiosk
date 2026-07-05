@@ -9,6 +9,7 @@ import 'package:kiosklock_agent/core/secure_exit_manager.dart';
 import 'package:kiosklock_agent/core/telemetry_service.dart';
 import 'package:kiosklock_agent/features/browser/kiosk_browser_screen.dart';
 import 'package:kiosklock_agent/features/config/kiosk_config_screen.dart';
+import 'package:kiosklock_agent/features/launcher/kiosk_launcher_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -275,6 +276,16 @@ class _PolicySyncScreenState extends State<PolicySyncScreen> {
     return ValueListenableBuilder<Map<String, dynamic>?>(
       valueListenable: PolicySyncService.instance.activePolicyNotifier,
       builder: (context, policy, _) {
+        if (policy != null && policy['policy_type'] == 'multi_app') {
+          final restrictions = Map<String, dynamic>.from(policy['restrictions'] ?? {});
+          final apps = List<Map<String, dynamic>>.from(
+              (restrictions['apps'] as List?)?.map((e) => Map<String, dynamic>.from(e as Map)) ?? []);
+          return KioskLauncherScreen(
+            apps: apps,
+            onAdminRequested: _showPinDialog,
+          );
+        }
+
         if (policy != null && policy['policy_type'] == 'url_whitelist') {
           final restrictions = Map<String, dynamic>.from(policy['restrictions'] ?? {});
           final String homeUrl = policy['target'] ?? '';
