@@ -383,6 +383,26 @@ class KioskMethodChannelHandler(private val activity: Activity) : MethodCallHand
                     result.error("STATE_FAILED", e.message, null)
                 }
             }
+            "getSetupPermissionsStatus" -> {
+                try {
+                    result.success(SetupPermissionsHelper.getStatus(activity))
+                } catch (e: Exception) {
+                    result.error("SETUP_STATUS_FAILED", e.message, null)
+                }
+            }
+            "openSetupPermission" -> {
+                val permissionId = call.argument<String>("permissionId")
+                if (permissionId == null) {
+                    result.error("BAD_ARGS", "permissionId is required", null)
+                    return
+                }
+                try {
+                    val opened = SetupPermissionsHelper.open(activity, permissionId)
+                    result.success(opened)
+                } catch (e: Exception) {
+                    result.error("OPEN_SETUP_FAILED", e.message, null)
+                }
+            }
             else -> {
                 result.notImplemented()
             }
