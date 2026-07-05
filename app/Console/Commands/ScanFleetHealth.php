@@ -84,7 +84,7 @@ class ScanFleetHealth extends Command
             'status' => Alert::STATUS_OPEN,
         ]);
 
-        broadcast(new AlertRaised($alert));
+        event(new AlertRaised($alert));
 
         return 1;
     }
