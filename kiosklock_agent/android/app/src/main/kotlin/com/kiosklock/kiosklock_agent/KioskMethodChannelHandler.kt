@@ -180,6 +180,40 @@ class KioskMethodChannelHandler(private val activity: Activity) : MethodCallHand
                     result.error("UNLOCK_FAILED", e.message, null)
                 }
             }
+            "reboot" -> {
+                // Remote reboot (device-owner only, API 24+).
+                try {
+                    val dpm = activity.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                    val adminComponent = ComponentName(activity, KioskDeviceAdminReceiver::class.java)
+                    if (dpm.isDeviceOwnerApp(activity.packageName) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                        dpm.reboot(adminComponent)
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                } catch (e: Exception) {
+                    result.error("REBOOT_FAILED", e.message, null)
+                }
+            }
+            "wipe" -> {
+                // Remote factory reset (device-owner only). Destructive.
+                try {
+                    val dpm = activity.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                    val adminComponent = ComponentName(activity, KioskDeviceAdminReceiver::class.java)
+                    if (dpm.isDeviceOwnerApp(activity.packageName)) {
+                        // Clear the factory-reset restriction we set during lock, otherwise wipe throws.
+                        try {
+                            dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_FACTORY_RESET)
+                        } catch (e: Exception) {}
+                        dpm.wipeData(0)
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
+                } catch (e: Exception) {
+                    result.error("WIPE_FAILED", e.message, null)
+                }
+            }
             "getAdminExtras" -> {
                 // Surfaces the enrollment_token / policy_id passed via the QR provisioning
                 // extras bundle. During device-owner provisioning the setup wizard delivers
