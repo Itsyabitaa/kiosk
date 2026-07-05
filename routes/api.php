@@ -60,6 +60,14 @@ Route::middleware('auth:api')->group(function () {
     // Real-time remote commands
     Route::post('/admin/devices/{id}/commands', [\App\Http\Controllers\DeviceCommandController::class, 'issueToDevice']);
     Route::post('/admin/groups/{id}/commands', [\App\Http\Controllers\DeviceCommandController::class, 'issueToGroup']);
+
+    // Staged rollouts
+    Route::post('/admin/rollouts', [\App\Http\Controllers\RolloutController::class, 'store']);
+    Route::get('/admin/rollouts/{id}', [\App\Http\Controllers\RolloutController::class, 'show']);
+    Route::post('/admin/rollouts/{id}/pause', [\App\Http\Controllers\RolloutController::class, 'pause']);
+    Route::post('/admin/rollouts/{id}/resume', [\App\Http\Controllers\RolloutController::class, 'resume']);
+    Route::post('/admin/rollouts/{id}/complete', [\App\Http\Controllers\RolloutController::class, 'complete']);
+    Route::post('/admin/rollouts/{id}/rollback', [\App\Http\Controllers\RolloutController::class, 'rollback']);
 });
 
 // Broadcasting auth (JWT-based, supports both device and admin tokens)
