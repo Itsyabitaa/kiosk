@@ -178,6 +178,7 @@ class DeviceEnrollmentController extends Controller
             'policy_id' => 'required|integer',
             'status' => 'required|string|in:applied,error',
             'error_message' => 'nullable|string',
+            'version' => 'nullable|integer',
         ]);
 
         if ($validator->fails()) {
@@ -191,9 +192,16 @@ class DeviceEnrollmentController extends Controller
             ->where('policy_id', $policyId)
             ->firstOrFail();
 
-        $assignment->update([
-            'status' => $status,
-        ]);
+        $update = ['status' => $status];
+
+        // Record the version the device actually applied so the dashboard can compute
+        // compliance (applied_version vs the assigned policy's version).
+        if ($status === 'applied') {
+            $update['applied_version'] = $request->input('version')
+                ?? Policy::withoutGlobalScopes()->find($policyId)?->version;
+        }
+
+        $assignment->update($update);
 
         return response()->json(['success' => true]);
     }
