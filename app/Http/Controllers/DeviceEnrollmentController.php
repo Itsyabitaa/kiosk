@@ -232,6 +232,25 @@ class DeviceEnrollmentController extends Controller
             'details' => $request->input('details'),
         ]);
 
+        // Tamper events are promoted into the fleet alert feed (Sprint 9 tamper alerts now have
+        // a durable home) and pushed to the org dashboard in real time.
+        if (str_contains((string) $request->input('event_type'), 'tamper')) {
+            $device = Device::withoutGlobalScopes()->find($deviceId);
+            if ($device) {
+                $alert = \App\Models\Alert::create([
+                    'org_id' => $device->org_id,
+                    'device_id' => $device->id,
+                    'type' => \App\Models\Alert::TYPE_TAMPER,
+                    'severity' => 'critical',
+                    'message' => 'Tamper detected on device ' . $device->device_uid,
+                    'details' => $request->input('details'),
+                    'status' => \App\Models\Alert::STATUS_OPEN,
+                ]);
+
+                broadcast(new \App\Events\AlertRaised($alert));
+            }
+        }
+
         return response()->json($event, 201);
     }
 
