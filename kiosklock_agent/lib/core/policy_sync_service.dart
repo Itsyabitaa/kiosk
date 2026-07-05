@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -8,6 +9,10 @@ import 'networking.dart';
 
 class PolicySyncService {
   static final PolicySyncService instance = PolicySyncService();
+
+  /// Secure-storage key holding the operator-configured standalone policy (set via the
+  /// PIN-protected config panel). When present it overrides [AppConfig.bundledPolicy].
+  static const String kStandalonePolicyKey = 'standalone_policy';
 
   final Dio _dio;
   final FlutterSecureStorage _storage;
@@ -33,10 +38,30 @@ class PolicySyncService {
     syncPolicy();
   }
 
-  /// Apply the on-device [AppConfig.bundledPolicy] with no network access. Mirrors the apply
-  /// path used for server-delivered policies so the same native lock + UI rendering kicks in.
+  /// Returns the standalone policy the operator saved locally, or `null` if none is set yet.
+  Future<Map<String, dynamic>?> loadSavedStandalonePolicy() async {
+    final raw = await _storage.read(key: kStandalonePolicyKey);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Persist a new standalone policy (from the config panel) and immediately enforce it.
+  Future<void> saveAndApplyStandalonePolicy(Map<String, dynamic> policy) async {
+    await _storage.write(key: kStandalonePolicyKey, value: jsonEncode(policy));
+    await applyStandalonePolicy();
+  }
+
+  /// Apply the active standalone policy with no network access. Uses the operator-configured
+  /// policy from secure storage when present, otherwise the baked-in [AppConfig.bundledPolicy].
+  /// Mirrors the apply path used for server-delivered policies so the same native lock + UI
+  /// rendering kicks in.
   Future<void> applyStandalonePolicy() async {
-    final policy = AppConfig.bundledPolicy;
+    final saved = await loadSavedStandalonePolicy();
+    final policy = saved ?? AppConfig.bundledPolicy;
     activePolicyNotifier.value = Map<String, dynamic>.from(policy);
 
     final String policyType = policy['policy_type'];

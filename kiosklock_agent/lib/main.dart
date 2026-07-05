@@ -8,6 +8,7 @@ import 'package:kiosklock_agent/core/policy_sync_service.dart';
 import 'package:kiosklock_agent/core/secure_exit_manager.dart';
 import 'package:kiosklock_agent/core/telemetry_service.dart';
 import 'package:kiosklock_agent/features/browser/kiosk_browser_screen.dart';
+import 'package:kiosklock_agent/features/config/kiosk_config_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -213,7 +214,7 @@ class _PolicySyncScreenState extends State<PolicySyncScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('Exit Kiosk Mode'),
+              title: const Text('Admin Access'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -225,6 +226,11 @@ class _PolicySyncScreenState extends State<PolicySyncScreen> {
                         style: const TextStyle(color: Colors.red, fontSize: 13),
                       ),
                     ),
+                  const Text(
+                    'Enter the password to configure or exit the kiosk.',
+                    style: TextStyle(fontSize: 13, color: Colors.black54),
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: pinController,
                     decoration: const InputDecoration(labelText: 'Enter PIN'),
@@ -241,12 +247,12 @@ class _PolicySyncScreenState extends State<PolicySyncScreen> {
                 ElevatedButton(
                   onPressed: () async {
                     try {
-                      final success = await SecureExitManager.instance.verifyAndExit(pinController.text);
-                      if (success && mounted) {
+                      final ok = await SecureExitManager.instance.verifyPinOnly(pinController.text);
+                      if (ok && mounted) {
                         Navigator.of(context).pop();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Kiosk Mode exited successfully.')),
-                        );
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => const KioskConfigScreen(),
+                        ));
                       }
                     } catch (e) {
                       setState(() {
@@ -254,7 +260,7 @@ class _PolicySyncScreenState extends State<PolicySyncScreen> {
                       });
                     }
                   },
-                  child: const Text('Submit'),
+                  child: const Text('Unlock'),
                 ),
               ],
             );

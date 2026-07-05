@@ -31,6 +31,10 @@ class AppConfig {
   ///      },
   ///    }
   ///
+  /// This is only the *initial* default. Once an operator sets a target from the on-device
+  /// PIN-protected config panel (Lock to App / Lock to Website), that saved choice is persisted
+  /// in secure storage and overrides this value on every launch/reboot.
+  ///
   /// Default: pin the device to this agent app itself, which needs nothing else installed and
   /// no network. Change `target` to lock to whichever app you actually want.
   static const Map<String, dynamic> bundledPolicy = {

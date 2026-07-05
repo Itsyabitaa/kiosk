@@ -3,6 +3,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import 'kiosk_channel.dart';
+import 'networking.dart';
 
 class SecureExitManager {
   static final SecureExitManager instance = SecureExitManager();
@@ -11,7 +12,7 @@ class SecureExitManager {
   final Dio _dio;
 
   SecureExitManager({Dio? dio})
-      : _dio = dio ?? Dio(BaseOptions(baseUrl: 'http://localhost/api'));
+      : _dio = dio ?? Dio(BaseOptions(baseUrl: Networking.apiBaseUrl));
 
   Future<void> seedDefaultPinIfNeeded() async {
     final currentPin = await _storage.read(key: 'exit_pin_hash');
@@ -19,6 +20,55 @@ class SecureExitManager {
       final defaultPinHash = sha256.convert(utf8.encode('1234')).toString();
       await _storage.write(key: 'exit_pin_hash', value: defaultPinHash);
     }
+  }
+
+  /// Verify the admin PIN WITHOUT exiting kiosk mode. Used to gate the local configuration
+  /// panel. Applies the same lockout/backoff rules as [verifyAndExit].
+  Future<bool> verifyPinOnly(String inputPin) async {
+    await seedDefaultPinIfNeeded();
+
+    final lockoutExpiryStr = await _storage.read(key: 'pin_lockout_expiry');
+    if (lockoutExpiryStr != null) {
+      final expiry = DateTime.parse(lockoutExpiryStr);
+      if (DateTime.now().isBefore(expiry)) {
+        final remaining = expiry.difference(DateTime.now()).inSeconds;
+        throw Exception('PIN lockout active. Try again in $remaining seconds.');
+      }
+    }
+
+    final storedHash = await _storage.read(key: 'exit_pin_hash');
+    final inputHash = sha256.convert(utf8.encode(inputPin)).toString();
+
+    if (storedHash == inputHash) {
+      await _storage.delete(key: 'failed_pin_attempts');
+      await _storage.delete(key: 'pin_lockout_expiry');
+      return true;
+    }
+
+    final attemptsStr = await _storage.read(key: 'failed_pin_attempts') ?? '0';
+    final attempts = int.parse(attemptsStr) + 1;
+    await _storage.write(key: 'failed_pin_attempts', value: '$attempts');
+
+    if (attempts >= 5) {
+      final expiry = DateTime.now().add(const Duration(minutes: 1));
+      await _storage.write(key: 'pin_lockout_expiry', value: expiry.toIso8601String());
+      throw Exception('Too many failed attempts. Lockout for 60 seconds.');
+    }
+
+    throw Exception('Incorrect PIN. Attempt $attempts of 5.');
+  }
+
+  /// Change the admin PIN (requires the current PIN).
+  Future<void> changePin(String currentPin, String newPin) async {
+    final ok = await verifyPinOnly(currentPin);
+    if (!ok) {
+      throw Exception('Current PIN is incorrect.');
+    }
+    if (newPin.length < 4) {
+      throw Exception('New PIN must be at least 4 digits.');
+    }
+    final newHash = sha256.convert(utf8.encode(newPin)).toString();
+    await _storage.write(key: 'exit_pin_hash', value: newHash);
   }
 
   Future<bool> verifyAndExit(String inputPin) async {
