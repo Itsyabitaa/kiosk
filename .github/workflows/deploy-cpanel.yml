@@ -1,0 +1,96 @@
+name: Publish Website to CPanel
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  FTP-Deploy-Action:
+    name: FTP-Deploy-Action
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        tools: composer
+        extensions: mbstring, xml, ctype, json, tokenizer, pdo_mysql
+
+    - name: Create Laravel directories
+      run: |
+        mkdir -p bootstrap/cache storage storage/framework storage/framework/{cache,sessions,views} storage/framework/cache/data storage/app/public storage/logs
+        chmod -R 775 storage bootstrap/cache
+
+    - name: Install Composer dependencies
+      run: |
+        composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+        composer dump-autoload
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Build assets
+      run: |
+        npm install
+        npm run build
+
+    - name: Clear Laravel cache
+      run: |
+        php artisan config:clear
+        php artisan view:clear
+        php artisan route:clear
+
+    - name: Clean storage for deployment
+      run: |
+        # Remove cache files but keep .gitkeep
+        find storage/framework/cache/data -type f ! -name '.gitkeep' -delete 2>/dev/null || true
+        find storage/framework/sessions -type f ! -name '.gitkeep' -delete 2>/dev/null || true
+        find storage/framework/views -type f ! -name '.gitkeep' -delete 2>/dev/null || true
+        find storage/logs -type f ! -name '.gitkeep' -delete 2>/dev/null || true
+        # Clean storage/app/public but keep .gitkeep (user uploads should not be in git)
+        find storage/app/public -type f ! -name '.gitkeep' -delete 2>/dev/null || true
+        # Ensure .gitkeep files exist
+        touch storage/framework/cache/data/.gitkeep
+        touch storage/framework/sessions/.gitkeep
+        touch storage/framework/views/.gitkeep
+        touch storage/logs/.gitkeep
+        touch storage/app/public/.gitkeep
+
+    - name: FTP Deploy
+      uses: SamKirkland/FTP-Deploy-Action@4.3.3
+      with:
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        local-dir: ./
+        server-dir: /
+        exclude: |
+          **/node_modules/**
+          **/.git/**
+          **/.github/**
+          **/.env
+          **/tests/**
+          **/vendor/**
+          **/.idea/**
+          **/*.md
+          **/phpunit.xml
+          **/composer.lock
+          **/package-lock.json
+          **/bun.lockb
+          **/judge0/tmp/**
+          **/judge0/log/**
+          **/judge0/vendor/**
+          **/judge0/.git/**
+          **/judge0/.github/**
+          **/judge0/spec/**
+          **/judge0/.rspec
+          **/judge0/.rubocop.yml
