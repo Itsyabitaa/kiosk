@@ -180,6 +180,33 @@ class KioskMethodChannelHandler(private val activity: Activity) : MethodCallHand
                     result.error("UNLOCK_FAILED", e.message, null)
                 }
             }
+            "getAdminExtras" -> {
+                // Surfaces the enrollment_token / policy_id passed via the QR provisioning
+                // extras bundle. During device-owner provisioning the setup wizard delivers
+                // EXTRA_PROVISIONING_ADMIN_EXTRAS_BUNDLE to KioskDeviceAdminReceiver, which we
+                // persist to SharedPreferences and read back here for the Flutter agent.
+                try {
+                    val prefs = activity.getSharedPreferences(
+                        KioskDeviceAdminReceiver.PREFS_NAME,
+                        Context.MODE_PRIVATE
+                    )
+
+                    val token = prefs.getString(KioskDeviceAdminReceiver.KEY_ENROLLMENT_TOKEN, null)
+
+                    if (token.isNullOrEmpty()) {
+                        result.success(null)
+                    } else {
+                        result.success(mapOf(
+                            "enrollment_token" to token,
+                            "policy_id" to prefs.getString(KioskDeviceAdminReceiver.KEY_POLICY_ID, null),
+                            "org_id" to prefs.getString(KioskDeviceAdminReceiver.KEY_ORG_ID, null),
+                            "server_url" to prefs.getString(KioskDeviceAdminReceiver.KEY_SERVER_URL, null)
+                        ))
+                    }
+                } catch (e: Exception) {
+                    result.error("ADMIN_EXTRAS_FAILED", e.message, null)
+                }
+            }
             "getDeviceState" -> {
                 try {
                     val dpm = activity.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
