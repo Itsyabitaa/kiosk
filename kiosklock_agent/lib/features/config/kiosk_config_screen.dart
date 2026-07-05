@@ -53,8 +53,10 @@ class _KioskConfigScreenState extends State<KioskConfigScreen> {
       if (type == 'url_whitelist') {
         _mode = _LockMode.website;
         _urlController.text = target;
+        final domains = List<String>.from(restrictions['allowed_domains'] ?? []);
+        _allowSubdomains = domains.any((d) => d.startsWith('*.'));
         _domainsController.text =
-            (List<String>.from(restrictions['allowed_domains'] ?? [])).join(', ');
+            domains.map((d) => d.startsWith('*.') ? d.substring(2) : d).join(', ');
         _idleController.text = '${restrictions['idle_timeout_minutes'] ?? 5}';
       } else {
         _mode = _LockMode.app;
