@@ -380,7 +380,11 @@ class DeviceEnrollmentController extends Controller
 
         $command->update([
             'status' => 'acknowledged',
+            'acked_at' => Carbon::now(),
+            'delivered_at' => $command->delivered_at ?? Carbon::now(),
         ]);
+
+        $device = Device::withoutGlobalScopes()->find($id);
 
         \App\Models\DeviceEvent::create([
             'device_id' => $id,
@@ -388,9 +392,19 @@ class DeviceEnrollmentController extends Controller
             'status' => 'acknowledged',
             'details' => [
                 'command' => $command->command_type,
-                'platform' => 'ios',
+                'platform' => $device?->platform,
             ],
         ]);
+
+        // Notify the org dashboard of per-device delivery confirmation (rollout progress etc.).
+        if ($device) {
+            broadcast(new \App\Events\DeviceDeliveryConfirmed($command->fresh(), (int) $device->org_id));
+
+            // If this ack completes a rollout wave command, advance rollout progress.
+            if ($command->rollout_id) {
+                \App\Services\RolloutManager::onCommandAcked($command);
+            }
+        }
 
         return response()->json(['success' => true]);
     }
