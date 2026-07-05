@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:kiosklock_agent/features/enrollment/enrollment_repository.dart';
 
 import 'package:kiosklock_agent/core/policy_sync_service.dart';
+import 'package:kiosklock_agent/core/secure_exit_manager.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -125,8 +126,6 @@ class _EnrollmentScreenState extends State<EnrollmentScreen> {
     );
   }
 }
-
-import 'package:kiosklock_agent/core/secure_exit_manager.dart';
 
 class PolicySyncScreen extends StatefulWidget {
   const PolicySyncScreen({super.key});
