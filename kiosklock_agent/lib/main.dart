@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:kiosklock_agent/features/enrollment/enrollment_repository.dart';
 
+import 'package:kiosklock_agent/core/app_config.dart';
 import 'package:kiosklock_agent/core/command_channel_service.dart';
 import 'package:kiosklock_agent/core/kiosk_channel.dart';
 import 'package:kiosklock_agent/core/policy_sync_service.dart';
@@ -17,6 +18,8 @@ void main() {
 /// Starts the real-time command channel + periodic telemetry once the device is enrolled.
 /// Safe to call multiple times (each service guards against double-start).
 void startFleetServices() {
+  // These require the backend; in standalone (offline) mode there's nothing to connect to.
+  if (AppConfig.standaloneMode) return;
   CommandChannelService.instance.start();
   TelemetryService.instance.start();
 }
@@ -54,6 +57,17 @@ class _StartupScreenState extends State<StartupScreen> {
   }
 
   Future<void> _checkEnrollment() async {
+    // Standalone/offline: no enrollment, no server. Apply the bundled policy and go straight
+    // to the kiosk screen.
+    if (AppConfig.standaloneMode) {
+      await PolicySyncService.instance.applyStandalonePolicy();
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(MaterialPageRoute(
+        builder: (_) => const PolicySyncScreen(),
+      ));
+      return;
+    }
+
     bool enrolled = await _repository.isEnrolled();
     if (!mounted) return;
 
@@ -270,23 +284,28 @@ class _PolicySyncScreenState extends State<PolicySyncScreen> {
           );
         }
 
+        final bool standalone = AppConfig.standaloneMode;
         return Scaffold(
-          appBar: AppBar(title: const Text('Syncing Policies...')),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: () => showMockQrScannerSheet(context),
-            icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Scan QR'),
-          ),
+          appBar: AppBar(title: Text(standalone ? 'Kiosk Locked (Offline)' : 'Syncing Policies...')),
+          floatingActionButton: standalone
+              ? null
+              : FloatingActionButton.extended(
+                  onPressed: () => showMockQrScannerSheet(context),
+                  icon: const Icon(Icons.qr_code_scanner),
+                  label: const Text('Scan QR'),
+                ),
           body: GestureDetector(
             onTap: _handleTap,
             behavior: HitTestBehavior.opaque,
-            child: const Center(
+            child: Center(
               child: Padding(
-                padding: EdgeInsets.all(24.0),
+                padding: const EdgeInsets.all(24.0),
                 child: Text(
-                  'Device is enrolled. Waiting for policies...\n\n(Tap screen 5 times in 3 seconds to exit)',
+                  standalone
+                      ? 'Standalone kiosk active — running offline with the built-in policy.\n\n(Tap screen 5 times in 3 seconds to exit)'
+                      : 'Device is enrolled. Waiting for policies...\n\n(Tap screen 5 times in 3 seconds to exit)',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16),
+                  style: const TextStyle(fontSize: 16),
                 ),
               ),
             ),

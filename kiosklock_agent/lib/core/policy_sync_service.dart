@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'app_config.dart';
 import 'kiosk_channel.dart';
 import 'networking.dart';
 
@@ -20,10 +21,38 @@ class PolicySyncService {
         _storage = storage ?? const FlutterSecureStorage();
 
   void startSync() {
+    // In standalone mode there is no server to poll — apply the bundled policy once instead.
+    if (AppConfig.standaloneMode) {
+      applyStandalonePolicy();
+      return;
+    }
+
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 15), (_) => syncPolicy());
     // Initial sync
     syncPolicy();
+  }
+
+  /// Apply the on-device [AppConfig.bundledPolicy] with no network access. Mirrors the apply
+  /// path used for server-delivered policies so the same native lock + UI rendering kicks in.
+  Future<void> applyStandalonePolicy() async {
+    final policy = AppConfig.bundledPolicy;
+    activePolicyNotifier.value = Map<String, dynamic>.from(policy);
+
+    final String policyType = policy['policy_type'];
+    final String? target = policy['target'] as String?;
+    final Map<String, dynamic> restrictions =
+        Map<String, dynamic>.from(policy['restrictions'] ?? {});
+
+    try {
+      if (policyType == 'single_app' && target != null && target.isNotEmpty) {
+        await KioskChannel.lockToApp(target, restrictions);
+      } else if (policyType == 'url_whitelist') {
+        await KioskChannel.lockToApp('com.kiosklock.kiosklock_agent', restrictions);
+      }
+    } catch (e) {
+      debugPrint('Standalone policy apply error: $e');
+    }
   }
 
   void stopSync() {
