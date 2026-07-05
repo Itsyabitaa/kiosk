@@ -15,3 +15,5 @@ Route::group([
 });
 
 Route::post('/enroll', [DeviceEnrollmentController::class, 'enroll']);
+
+Route::get('/admin/devices', [\App\Http\Controllers\DeviceController::class, 'index'])->middleware('auth:api');
