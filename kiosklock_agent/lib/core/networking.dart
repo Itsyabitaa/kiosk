@@ -8,9 +8,12 @@ import 'storage.dart';
 /// services. Centralizing here means the QR-provisioned `server_url` (or a build flavor) can
 /// later drive both HTTP and WebSocket endpoints from one place.
 class Networking {
-  static const String host = 'localhost';
+  // Dev machine's LAN IP (reachable from a physical phone on the same Wi-Fi).
+  // Emulator alternatives: 10.0.2.2 (Android AVD) / 10.0.3.2 (Genymotion) with the same port.
+  static const String host = '192.168.100.60';
   static const String httpScheme = 'http';
-  static const String apiBaseUrl = '$httpScheme://$host/api';
+  static const int httpPort = 8000; // `php artisan serve --host=0.0.0.0 --port=8000`
+  static const String apiBaseUrl = '$httpScheme://$host:$httpPort/api';
 
   // Reverb websocket endpoint. Pusher protocol path is /app/{appKey}.
   static const String wsHost = host;

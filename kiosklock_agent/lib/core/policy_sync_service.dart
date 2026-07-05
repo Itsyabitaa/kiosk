@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'kiosk_channel.dart';
+import 'networking.dart';
 
 class PolicySyncService {
   static final PolicySyncService instance = PolicySyncService();
@@ -15,7 +16,7 @@ class PolicySyncService {
   final ValueNotifier<Map<String, dynamic>?> activePolicyNotifier = ValueNotifier(null);
 
   PolicySyncService({Dio? dio, FlutterSecureStorage? storage})
-      : _dio = dio ?? Dio(BaseOptions(baseUrl: 'http://localhost/api')),
+      : _dio = dio ?? Dio(BaseOptions(baseUrl: Networking.apiBaseUrl)),
         _storage = storage ?? const FlutterSecureStorage();
 
   void startSync() {
