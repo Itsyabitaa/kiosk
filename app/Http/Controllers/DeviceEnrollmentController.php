@@ -255,7 +255,7 @@ class DeviceEnrollmentController extends Controller
                     'status' => \App\Models\Alert::STATUS_OPEN,
                 ]);
 
-                broadcast(new \App\Events\AlertRaised($alert));
+                event(new \App\Events\AlertRaised($alert));
             }
         }
 

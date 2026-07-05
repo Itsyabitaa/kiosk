@@ -23,7 +23,9 @@ class CommandDispatcher
             'rollout_id' => $rolloutId,
         ]);
 
-        broadcast(new DeviceCommandIssued($command));
+        // Dispatched via event() (not broadcast()) so the ShouldBroadcast event both broadcasts
+        // in production and is assertable with Event::fake in tests.
+        event(new DeviceCommandIssued($command));
 
         return $command;
     }
