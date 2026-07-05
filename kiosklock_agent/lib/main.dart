@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:kiosklock_agent/features/enrollment/enrollment_repository.dart';
 
+import 'package:kiosklock_agent/core/policy_sync_service.dart';
+
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  PolicySyncService.instance.startSync();
   runApp(const MyApp());
 }
 
