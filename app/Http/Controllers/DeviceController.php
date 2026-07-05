@@ -80,6 +80,72 @@ class DeviceController extends Controller
     }
 
     /**
+     * Chronological, merged device timeline: policy changes, lock/unlock + generic events,
+     * tamper/health alerts, and recent telemetry snapshots, newest first.
+     */
+    public function timeline(Request $request, $id)
+    {
+        // findOrFail enforces org tenancy via the global scope.
+        $device = Device::findOrFail($id);
+        $limit = (int) $request->query('limit', 100);
+
+        $timeline = collect();
+
+        foreach ($device->events()->latest()->limit($limit)->get() as $event) {
+            $timeline->push([
+                'type' => 'event',
+                'event_type' => $event->event_type,
+                'status' => $event->status,
+                'details' => $event->details,
+                'timestamp' => optional($event->created_at)->toIso8601String(),
+            ]);
+        }
+
+        foreach (\App\Models\Alert::where('device_id', $device->id)->latest()->limit($limit)->get() as $alert) {
+            $timeline->push([
+                'type' => 'alert',
+                'alert_type' => $alert->type,
+                'severity' => $alert->severity,
+                'message' => $alert->message,
+                'status' => $alert->status,
+                'timestamp' => optional($alert->created_at)->toIso8601String(),
+            ]);
+        }
+
+        foreach (\App\Models\DeviceTelemetry::where('device_id', $device->id)->latest('recorded_at')->limit($limit)->get() as $t) {
+            $timeline->push([
+                'type' => 'telemetry',
+                'battery_level' => $t->battery_level,
+                'connectivity_type' => $t->connectivity_type,
+                'app_version' => $t->app_version,
+                'os_version' => $t->os_version,
+                'timestamp' => optional($t->recorded_at)->toIso8601String(),
+            ]);
+        }
+
+        $assignment = \App\Models\PolicyAssignment::where('device_id', $device->id)->first();
+        if ($assignment) {
+            $timeline->push([
+                'type' => 'policy_change',
+                'policy_id' => $assignment->policy_id,
+                'status' => $assignment->status,
+                'applied_version' => $assignment->applied_version,
+                'timestamp' => optional($assignment->assigned_at)->toIso8601String(),
+            ]);
+        }
+
+        $sorted = $timeline
+            ->sortByDesc('timestamp')
+            ->values()
+            ->all();
+
+        return response()->json([
+            'device_id' => $device->id,
+            'timeline' => $sorted,
+        ]);
+    }
+
+    /**
      * Attach a tag to a device (tag-based grouping).
      */
     public function addTag(Request $request, $id)
