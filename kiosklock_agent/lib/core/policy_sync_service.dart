@@ -98,7 +98,7 @@ class PolicySyncService {
           if (success) {
             await _storage.write(key: 'last_applied_policy_id', value: '$policyId');
             await _storage.write(key: 'last_applied_policy_version', value: '$version');
-            await _ackPolicy(deviceId, policyId, 'applied', options);
+            await _ackPolicy(deviceId, policyId, 'applied', options, null, version);
           } else {
             await _ackPolicy(deviceId, policyId, 'error', options, errorMessage);
           }
@@ -112,7 +112,7 @@ class PolicySyncService {
     }
   }
 
-  Future<void> _ackPolicy(String deviceId, int policyId, String status, Options options, [String? errorMessage]) async {
+  Future<void> _ackPolicy(String deviceId, int policyId, String status, Options options, [String? errorMessage, int? version]) async {
     try {
       await _dio.post(
         '/devices/$deviceId/policy-ack',
@@ -120,6 +120,7 @@ class PolicySyncService {
           'policy_id': policyId,
           'status': status,
           'error_message': errorMessage,
+          'version': version,
         },
         options: options,
       );
