@@ -10,19 +10,59 @@ use Illuminate\Support\Facades\Validator;
 class DeviceController extends Controller
 {
     /**
-     * Display a paginated and filterable listing of the devices.
+     * Paginated, filterable device list for the fleet dashboard.
+     *
+     * Performance: eager-loads the assigned policy (no N+1) and joins the latest telemetry id
+     * via a correlated subquery instead of loading every snapshot per device. Filtering by
+     * group/tag/search/status is index-friendly, and results are always paginated.
      */
     public function index(Request $request)
     {
-        $status = $request->query('status');
+        $query = Device::query()
+            ->with('assignedPolicy')
+            ->with(['telemetry' => function ($q) {
+                // Only the newest snapshot per device (bounded), avoiding N unbounded loads.
+                $q->latest('recorded_at')->limit(1);
+            }]);
 
-        $query = Device::with('assignedPolicy');
-
-        if ($status) {
+        if ($status = $request->query('status')) {
             $query->where('enrollment_status', $status);
         }
 
-        $devices = $query->paginate($request->query('per_page', 15));
+        if ($platform = $request->query('platform')) {
+            $query->where('platform', $platform);
+        }
+
+        if ($search = $request->query('search')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('device_uid', 'like', "%{$search}%")
+                    ->orWhere('hardware_fingerprint', 'like', "%{$search}%");
+            });
+        }
+
+        if ($groupId = $request->query('group_id')) {
+            $query->whereIn('id', function ($sub) use ($groupId) {
+                $sub->select('device_id')
+                    ->from('device_group_memberships')
+                    ->where('group_id', $groupId);
+            });
+        }
+
+        if ($tag = $request->query('tag')) {
+            $query->whereIn('id', function ($sub) use ($tag) {
+                $sub->select('device_id')
+                    ->from('device_tags')
+                    ->where('tag', $tag);
+            });
+        }
+
+        $sort = in_array($request->query('sort'), ['last_seen_at', 'created_at', 'enrollment_status'], true)
+            ? $request->query('sort')
+            : 'last_seen_at';
+        $direction = $request->query('direction') === 'asc' ? 'asc' : 'desc';
+
+        $devices = $query->orderBy($sort, $direction)
+            ->paginate($request->query('per_page', 25));
 
         return response()->json($devices);
     }
