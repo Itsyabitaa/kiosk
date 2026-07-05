@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:kiosklock_agent/features/enrollment/enrollment_repository.dart';
 
+import 'package:kiosklock_agent/core/command_channel_service.dart';
 import 'package:kiosklock_agent/core/kiosk_channel.dart';
 import 'package:kiosklock_agent/core/policy_sync_service.dart';
 import 'package:kiosklock_agent/core/secure_exit_manager.dart';
+import 'package:kiosklock_agent/core/telemetry_service.dart';
 import 'package:kiosklock_agent/features/browser/kiosk_browser_screen.dart';
 
 void main() {
@@ -49,6 +51,7 @@ class _StartupScreenState extends State<StartupScreen> {
     if (!mounted) return;
 
     if (enrolled) {
+      startFleetServices();
       Navigator.of(context).pushReplacement(MaterialPageRoute(
         builder: (_) => const PolicySyncScreen(),
       ));
@@ -64,6 +67,7 @@ class _StartupScreenState extends State<StartupScreen> {
       try {
         await _repository.enroll(autoToken);
         PolicySyncService.instance.syncPolicy();
+        startFleetServices();
         if (!mounted) return;
         Navigator.of(context).pushReplacement(MaterialPageRoute(
           builder: (_) => const PolicySyncScreen(),
@@ -108,6 +112,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen> {
       await _repository.enroll(_tokenController.text);
       // Trigger an immediate policy sync check now that we have a device token
       PolicySyncService.instance.syncPolicy();
+      startFleetServices();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
         builder: (_) => const PolicySyncScreen(),
