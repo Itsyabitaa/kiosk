@@ -226,6 +226,11 @@ class FleetManagementTest extends TestCase
     {
         $device = $this->makeDevices(1)[0];
 
+        // Mint the admin token first: in production admins obtain their token via an isolated
+        // login request. (The shared JWT factory would otherwise inherit claims from the device
+        // token parsed in the sub-requests below.)
+        $adminToken = JWTAuth::fromUser($this->adminA);
+
         // Device may subscribe to its own channel.
         $ok = $this->withHeaders(['Authorization' => 'Bearer ' . $this->deviceToken($device)])
             ->postJson('/api/broadcasting/auth', [
@@ -243,7 +248,6 @@ class FleetManagementTest extends TestCase
             ])->assertStatus(403);
 
         // Admin may subscribe to their org channel.
-        $adminToken = JWTAuth::fromUser($this->adminA);
         $this->withHeaders(['Authorization' => 'Bearer ' . $adminToken])
             ->postJson('/api/broadcasting/auth', [
                 'socket_id' => '123.456',

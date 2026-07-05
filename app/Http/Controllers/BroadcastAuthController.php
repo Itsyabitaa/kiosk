@@ -22,13 +22,24 @@ class BroadcastAuthController extends Controller
             return response()->json(['error' => 'channel_name and socket_id are required'], 422);
         }
 
+        // Read the token from the current request's Authorization header directly. (Relying on
+        // JWTAuth::getToken() can return a stale token cached on the singleton from a prior
+        // request within the same long-lived process.)
+        $token = $request->bearerToken();
+        if (!$token) {
+            return response()->json(['error' => 'Unauthenticated'], 401);
+        }
+
         try {
-            $payload = JWTAuth::parseToken()->getPayload();
+            // Decode straight from the token via the provider (symmetric to how tokens are
+            // encoded). This reads the token's true claims and is immune to the shared JWT
+            // factory's cross-call state, unlike parseToken()->getPayload().
+            $claims = JWTAuth::getJWTProvider()->decode($token);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Unauthenticated'], 401);
         }
 
-        if (!$this->authorizes($payload, $channel)) {
+        if (!$this->authorizes($claims, $channel)) {
             return response()->json(['error' => 'Forbidden channel'], 403);
         }
 
@@ -39,26 +50,20 @@ class BroadcastAuthController extends Controller
      * Determine whether the JWT is allowed to subscribe to the requested channel.
      * - Devices may only subscribe to their own `private-device.{id}`.
      * - Admins may only subscribe to their org's `private-org.{orgId}`.
+     *
+     * @param array $claims
      */
-    private function authorizes($payload, string $channel): bool
+    private function authorizes(array $claims, string $channel): bool
     {
-        $type = $payload->get('type');
+        $type = $claims['type'] ?? null;
 
-        if ($type === 'device_token') {
-            return preg_match('/^private-device\.(\d+)$/', $channel, $m)
-                && (string) $payload->get('sub') === $m[1];
+        if (preg_match('/^private-device\.(\d+)$/', $channel, $m)) {
+            return $type === 'device_token' && (string) ($claims['sub'] ?? '') === $m[1];
         }
 
-        // Admin token: resolve the org from the authenticated admin model so we don't depend on
-        // a specific claim shape.
         if (preg_match('/^private-org\.(\d+)$/', $channel, $m)) {
-            $orgId = $payload->get('org_id');
-            if ($orgId === null) {
-                $admin = auth('api')->user();
-                $orgId = $admin?->org_id;
-            }
-
-            return $orgId !== null && (string) $orgId === $m[1];
+            // Only non-device (admin) tokens may listen on an org channel.
+            return $type !== 'device_token' && (string) ($claims['org_id'] ?? '') === $m[1];
         }
 
         return false;
