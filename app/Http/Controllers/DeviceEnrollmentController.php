@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Device;
+use App\Models\DeviceEvent;
 use App\Models\EnrollmentToken;
 use App\Models\Policy;
 use App\Models\PolicyAssignment;
@@ -159,5 +160,42 @@ class DeviceEnrollmentController extends Controller
         ]);
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Log a device event.
+     */
+    public function logEvent(Request $request, $id)
+    {
+        try {
+            $payload = JWTAuth::parseToken()->getPayload();
+            $deviceId = $payload->get('sub');
+            $tokenType = $payload->get('type');
+
+            if ($tokenType !== 'device_token' || (string)$deviceId !== (string)$id) {
+                return response()->json(['error' => 'Unauthorized device'], 401);
+            }
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Invalid device token: ' . $e->getMessage()], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'event_type' => 'required|string',
+            'status' => 'required|string',
+            'details' => 'nullable|array',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $event = DeviceEvent::create([
+            'device_id' => $deviceId,
+            'event_type' => $request->input('event_type'),
+            'status' => $request->input('status'),
+            'details' => $request->input('details'),
+        ]);
+
+        return response()->json($event, 201);
     }
 }
