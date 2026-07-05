@@ -84,6 +84,14 @@ class SecureExitManager {
     }
   }
 
+  Future<void> logKioskEvent(String eventType, String status, Map<String, dynamic> details) async {
+    final deviceId = await _storage.read(key: 'device_id');
+    final deviceToken = await _storage.read(key: 'device_token');
+    if (deviceId != null && deviceToken != null) {
+      await _logEvent(deviceId, deviceToken, eventType, status, details);
+    }
+  }
+
   Future<void> _logEvent(String deviceId, String deviceToken, String eventType, String status, Map<String, dynamic> details) async {
     try {
       await _dio.post(

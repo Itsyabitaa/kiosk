@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'kiosk_channel.dart';
@@ -10,6 +11,8 @@ class PolicySyncService {
   final FlutterSecureStorage _storage;
   Timer? _timer;
   bool _isSyncing = false;
+
+  final ValueNotifier<Map<String, dynamic>?> activePolicyNotifier = ValueNotifier(null);
 
   PolicySyncService({Dio? dio, FlutterSecureStorage? storage})
       : _dio = dio ?? Dio(BaseOptions(baseUrl: 'http://localhost/api')),
@@ -51,6 +54,7 @@ class PolicySyncService {
         final policy = data['policy'];
 
         if (policy == null) {
+          activePolicyNotifier.value = null;
           final lastAppliedId = await _storage.read(key: 'last_applied_policy_id');
           if (lastAppliedId != null) {
             await KioskChannel.unlock();
@@ -67,6 +71,9 @@ class PolicySyncService {
         final String? target = policy['target'];
         final Map<String, dynamic> restrictions = Map<String, dynamic>.from(policy['restrictions'] ?? {});
 
+        // Expose active policy to listeners
+        activePolicyNotifier.value = Map<String, dynamic>.from(policy);
+
         final lastAppliedIdStr = await _storage.read(key: 'last_applied_policy_id');
         final lastAppliedVerStr = await _storage.read(key: 'last_applied_policy_version');
 
@@ -78,7 +85,8 @@ class PolicySyncService {
             if (policyType == 'single_app' && target != null && target.isNotEmpty) {
               success = await KioskChannel.lockToApp(target, restrictions);
             } else if (policyType == 'url_whitelist') {
-              success = await KioskChannel.applyRestrictions(restrictions);
+              // Lock our own app package to run the Whitelisted WebView in kiosk mode
+              success = await KioskChannel.lockToApp('com.kiosklock.kiosklock_agent', restrictions);
             } else {
               success = true;
             }
