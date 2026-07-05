@@ -30,11 +30,11 @@ class DeviceController extends Controller
      */
     public function show($id)
     {
-        $device = Device::with('assignedPolicy')->findOrFail($id);
+        $device = Device::with(['assignedPolicy', 'events'])->findOrFail($id);
 
         return response()->json([
             'device' => $device,
-            'event_logs' => [], // stub event log for Sprint 2
+            'event_logs' => $device->events,
         ]);
     }
 }
