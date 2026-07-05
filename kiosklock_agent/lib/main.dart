@@ -47,16 +47,37 @@ class _StartupScreenState extends State<StartupScreen> {
   Future<void> _checkEnrollment() async {
     bool enrolled = await _repository.isEnrolled();
     if (!mounted) return;
-    
+
     if (enrolled) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(
         builder: (_) => const PolicySyncScreen(),
       ));
-    } else {
-      Navigator.of(context).pushReplacement(MaterialPageRoute(
-        builder: (_) => const EnrollmentScreen(),
-      ));
+      return;
     }
+
+    // Zero-touch path: if this device was provisioned via a QR code, the enrollment token was
+    // delivered through the admin extras bundle. Auto-enroll instead of asking for a code.
+    final extras = await KioskChannel.getAdminExtras();
+    final autoToken = extras?['enrollment_token'] as String?;
+
+    if (autoToken != null && autoToken.isNotEmpty) {
+      try {
+        await _repository.enroll(autoToken);
+        PolicySyncService.instance.syncPolicy();
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(MaterialPageRoute(
+          builder: (_) => const PolicySyncScreen(),
+        ));
+        return;
+      } catch (_) {
+        // Fall through to the manual enrollment screen if auto-enroll fails.
+      }
+    }
+
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(MaterialPageRoute(
+      builder: (_) => const EnrollmentScreen(),
+    ));
   }
 
   @override
@@ -239,6 +260,11 @@ class _PolicySyncScreenState extends State<PolicySyncScreen> {
 
         return Scaffold(
           appBar: AppBar(title: const Text('Syncing Policies...')),
+          floatingActionButton: FloatingActionButton.extended(
+            onPressed: () => showMockQrScannerSheet(context),
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scan QR'),
+          ),
           body: GestureDetector(
             onTap: _handleTap,
             behavior: HitTestBehavior.opaque,
@@ -255,6 +281,117 @@ class _PolicySyncScreenState extends State<PolicySyncScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// Presents a lightweight, camera-free QR scanner simulation. Real builds would replace this
+/// with a camera preview; on emulators/CI (which have no camera) this lets a QR provisioning
+/// token be entered manually so the reassign flow can be exercised end to end.
+Future<void> showMockQrScannerSheet(BuildContext context) {
+  return showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    builder: (context) => const _MockQrScannerSheet(),
+  );
+}
+
+class _MockQrScannerSheet extends StatefulWidget {
+  const _MockQrScannerSheet();
+
+  @override
+  State<_MockQrScannerSheet> createState() => _MockQrScannerSheetState();
+}
+
+class _MockQrScannerSheetState extends State<_MockQrScannerSheet> {
+  final _tokenController = TextEditingController();
+  final EnrollmentRepository _repository = EnrollmentRepository();
+  bool _isSubmitting = false;
+  String? _error;
+
+  Future<void> _submit() async {
+    final token = _tokenController.text.trim();
+    if (token.isEmpty) {
+      setState(() => _error = 'Enter a token to simulate a scan.');
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _error = null;
+    });
+
+    try {
+      await _repository.reassignPolicy(token);
+      PolicySyncService.instance.syncPolicy();
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Policy reassigned from scanned QR.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _tokenController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.qr_code_scanner),
+              SizedBox(width: 8),
+              Text('Simulate QR Scan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Paste the enrollment token encoded in the deployment QR to re-provision this device.',
+            style: TextStyle(fontSize: 13, color: Colors.black54),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _tokenController,
+            decoration: const InputDecoration(
+              labelText: 'Scanned token',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
+            ),
+          const SizedBox(height: 16),
+          if (_isSubmitting)
+            const Center(child: CircularProgressIndicator())
+          else
+            ElevatedButton.icon(
+              onPressed: _submit,
+              icon: const Icon(Icons.check),
+              label: const Text('Apply Scanned QR'),
+            ),
+        ],
+      ),
     );
   }
 }
