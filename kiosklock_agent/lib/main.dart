@@ -14,6 +14,13 @@ void main() {
   runApp(const MyApp());
 }
 
+/// Starts the real-time command channel + periodic telemetry once the device is enrolled.
+/// Safe to call multiple times (each service guards against double-start).
+void startFleetServices() {
+  CommandChannelService.instance.start();
+  TelemetryService.instance.start();
+}
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
