@@ -198,4 +198,174 @@ class DeviceEnrollmentController extends Controller
 
         return response()->json($event, 201);
     }
+
+    public function deviceUnlock(Request $request, $id)
+    {
+        if (!$this->validateDeviceToken($id)) {
+            return response()->json(['error' => 'Unauthorized device'], 401);
+        }
+
+        $device = Device::withoutGlobalScopes()->findOrFail($id);
+
+        if ($device->platform === 'ios') {
+            \App\Models\MdmCommand::create([
+                'device_id' => $device->id,
+                'command_type' => 'RemoveProfile',
+                'status' => 'pending',
+            ]);
+
+            \App\Models\DeviceEvent::create([
+                'device_id' => $device->id,
+                'event_type' => 'mdm_command',
+                'status' => 'sent',
+                'details' => [
+                    'command' => 'RemoveProfile',
+                    'platform' => 'ios',
+                    'initiated_by' => 'device_exit_gesture',
+                ],
+            ]);
+        } else {
+            \App\Models\DeviceEvent::create([
+                'device_id' => $device->id,
+                'event_type' => 'unlock',
+                'status' => 'success',
+                'details' => [
+                    'initiated_by' => 'device_exit_gesture',
+                    'platform' => 'android',
+                ],
+            ]);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    public function generateMdmProfile(Request $request, $id)
+    {
+        if (!$this->validateDeviceToken($id)) {
+            return response()->json(['error' => 'Unauthorized device'], 401);
+        }
+
+        $device = Device::withoutGlobalScopes()->findOrFail($id);
+        $assignment = PolicyAssignment::where('device_id', $device->id)->first();
+        $policy = $assignment ? Policy::withoutGlobalScopes()->find($assignment->policy_id) : null;
+        $restrictions = $policy ? $policy->restrictions : [];
+
+        $allowErase = isset($restrictions['block_factory_reset']) ? !$restrictions['block_factory_reset'] : false;
+        $allowAppInstallation = isset($restrictions['block_install_apps']) ? !$restrictions['block_install_apps'] : false;
+        $allowAppRemoval = isset($restrictions['block_uninstall_apps']) ? !$restrictions['block_uninstall_apps'] : false;
+
+        $allowSettings = isset($restrictions['block_settings']) ? !$restrictions['block_settings'] : false;
+        $allowAirDrop = isset($restrictions['block_airdrop']) ? !$restrictions['block_airdrop'] : false;
+        $allowAirPlay = isset($restrictions['block_airplay']) ? !$restrictions['block_airplay'] : false;
+        $allowControlCenter = isset($restrictions['block_control_center']) ? !$restrictions['block_control_center'] : false;
+
+        $xml = '<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadDisplayName</key>
+    <string>Kiosk KioskLock Profile</string>
+    <key>PayloadIdentifier</key>
+    <string>com.kiosklock.profile</string>
+    <key>PayloadRemovalDisallowed</key>
+    <true/>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadUUID</key>
+    <string>f3b5c16d-fd45-f38c-cc8f-ef2f3da56838</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>PayloadDisplayName</key>
+            <string>Restrictions</string>
+            <key>PayloadIdentifier</key>
+            <string>com.apple.applicationaccess</string>
+            <key>PayloadType</key>
+            <string>com.apple.applicationaccess</string>
+            <key>PayloadUUID</key>
+            <string>cc8f-ef2f3da56838-f3b5c16d-fd45-f38c</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>allowEraseContentAndSettings</key>
+            ' . ($allowErase ? '<true/>' : '<false/>') . '
+            <key>allowAppInstallation</key>
+            ' . ($allowAppInstallation ? '<true/>' : '<false/>') . '
+            <key>allowAppRemoval</key>
+            ' . ($allowAppRemoval ? '<true/>' : '<false/>') . '
+            <key>allowSettings</key>
+            ' . ($allowSettings ? '<true/>' : '<false/>') . '
+            <key>allowAirDrop</key>
+            ' . ($allowAirDrop ? '<true/>' : '<false/>') . '
+            <key>allowAirPlay</key>
+            ' . ($allowAirPlay ? '<true/>' : '<false/>') . '
+            <key>allowControlCenter</key>
+            ' . ($allowControlCenter ? '<true/>' : '<false/>') . '
+        </dict>
+    </array>
+</dict>
+</plist>';
+
+        return response($xml, 200, [
+            'Content-Type' => 'application/x-apple-aspen-config',
+            'Content-Disposition' => 'attachment; filename="kiosk.mobileconfig"',
+        ]);
+    }
+
+    public function getMdmCommands(Request $request, $id)
+    {
+        if (!$this->validateDeviceToken($id)) {
+            return response()->json(['error' => 'Unauthorized device'], 401);
+        }
+
+        $commands = \App\Models\MdmCommand::where('device_id', $id)
+            ->where('status', 'pending')
+            ->get();
+
+        return response()->json(['commands' => $commands]);
+    }
+
+    public function ackMdmCommand(Request $request, $id, $commandId)
+    {
+        if (!$this->validateDeviceToken($id)) {
+            return response()->json(['error' => 'Unauthorized device'], 401);
+        }
+
+        $command = \App\Models\MdmCommand::where('device_id', $id)
+            ->where('id', $commandId)
+            ->firstOrFail();
+
+        $command->update([
+            'status' => 'acknowledged',
+        ]);
+
+        \App\Models\DeviceEvent::create([
+            'device_id' => $id,
+            'event_type' => 'mdm_command',
+            'status' => 'acknowledged',
+            'details' => [
+                'command' => $command->command_type,
+                'platform' => 'ios',
+            ],
+        ]);
+
+        return response()->json(['success' => true]);
+    }
+
+    private function validateDeviceToken($id)
+    {
+        try {
+            $payload = JWTAuth::parseToken()->getPayload();
+            $deviceId = $payload->get('sub');
+            $tokenType = $payload->get('type');
+
+            if ($tokenType !== 'device_token' || (string)$deviceId !== (string)$id) {
+                return false;
+            }
+            return true;
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
 }

@@ -48,4 +48,12 @@ class Device extends Model
     {
         return $this->hasMany(DeviceEvent::class, 'device_id');
     }
+
+    /**
+     * Get the MDM commands for this device.
+     */
+    public function mdmCommands()
+    {
+        return $this->hasMany(MdmCommand::class, 'device_id');
+    }
 }

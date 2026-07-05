@@ -18,6 +18,7 @@ Route::post('/enroll', [DeviceEnrollmentController::class, 'enroll']);
 
 Route::get('/admin/devices', [\App\Http\Controllers\DeviceController::class, 'index'])->middleware('auth:api');
 Route::get('/admin/devices/{id}', [\App\Http\Controllers\DeviceController::class, 'show'])->middleware('auth:api');
+Route::post('/admin/devices/{id}/unlock', [\App\Http\Controllers\DeviceController::class, 'unlock'])->middleware('auth:api');
 
 Route::get('/admin/policies', [\App\Http\Controllers\PolicyController::class, 'index'])->middleware('auth:api');
 Route::post('/admin/policies', [\App\Http\Controllers\PolicyController::class, 'store'])->middleware('auth:api');
@@ -28,3 +29,7 @@ Route::post('/admin/policies/{id}/assign', [\App\Http\Controllers\PolicyControll
 Route::get('/devices/{id}/policy', [DeviceEnrollmentController::class, 'getPolicy']);
 Route::post('/devices/{id}/policy-ack', [DeviceEnrollmentController::class, 'ackPolicy']);
 Route::post('/devices/{id}/events', [DeviceEnrollmentController::class, 'logEvent']);
+Route::post('/devices/{id}/unlock', [DeviceEnrollmentController::class, 'deviceUnlock']);
+Route::get('/devices/{id}/mdm/profile', [DeviceEnrollmentController::class, 'generateMdmProfile']);
+Route::get('/devices/{id}/mdm/commands', [DeviceEnrollmentController::class, 'getMdmCommands']);
+Route::post('/devices/{id}/mdm/commands/{commandId}/ack', [DeviceEnrollmentController::class, 'ackMdmCommand']);
