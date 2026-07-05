@@ -30,6 +30,7 @@ Route::get('/devices/{id}/policy', [DeviceEnrollmentController::class, 'getPolic
 Route::post('/devices/{id}/policy-ack', [DeviceEnrollmentController::class, 'ackPolicy']);
 Route::post('/devices/{id}/events', [DeviceEnrollmentController::class, 'logEvent']);
 Route::post('/devices/{id}/unlock', [DeviceEnrollmentController::class, 'deviceUnlock']);
+Route::post('/devices/{id}/telemetry', [\App\Http\Controllers\TelemetryController::class, 'store']);
 Route::get('/devices/{id}/mdm/profile', [DeviceEnrollmentController::class, 'generateMdmProfile']);
 Route::get('/devices/{id}/mdm/commands', [DeviceEnrollmentController::class, 'getMdmCommands']);
 Route::post('/devices/{id}/mdm/commands/{commandId}/ack', [DeviceEnrollmentController::class, 'ackMdmCommand']);
