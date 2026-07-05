@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Alert;
 use App\Models\Device;
+use App\Models\DeviceGroup;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FleetController extends Controller
 {
