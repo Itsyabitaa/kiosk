@@ -27,64 +27,100 @@ class DeviceEnrollmentController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Validate the enrollment token
-        $enrollmentToken = EnrollmentToken::where('token', $request->enrollment_token)
-            ->where(function ($query) {
-                $query->whereNull('expires_at')
-                      ->orWhere('expires_at', '>', Carbon::now());
-            })
-            ->whereNull('used_at') // Depending on if it's single-use
-            ->first();
+        // Consume the token and transition the device state atomically. Locking the token row
+        // serializes concurrent enrollment attempts so a single-use token can only ever be
+        // redeemed once, even under a race.
+        try {
+            $result = \Illuminate\Support\Facades\DB::transaction(function () use ($request) {
+                $enrollmentToken = EnrollmentToken::withoutGlobalScopes()
+                    ->where('token', $request->enrollment_token)
+                    ->lockForUpdate()
+                    ->first();
 
-        if (!$enrollmentToken) {
-            return response()->json(['error' => 'Invalid or expired enrollment token'], 401);
+                if (!$enrollmentToken) {
+                    return ['status' => 401, 'body' => ['error' => 'Invalid or expired enrollment token']];
+                }
+
+                if ($enrollmentToken->expires_at && $enrollmentToken->expires_at->isPast()) {
+                    return ['status' => 401, 'body' => ['error' => 'Invalid or expired enrollment token']];
+                }
+
+                if ($enrollmentToken->single_use && $enrollmentToken->used_at !== null) {
+                    return ['status' => 401, 'body' => ['error' => 'Invalid or expired enrollment token']];
+                }
+
+                $fingerprint = $request->hardware_fingerprint;
+                $orgId = $enrollmentToken->org_id;
+
+                // Check for duplicate enrollment attempts from the same hardware_fingerprint
+                $device = Device::withoutGlobalScopes()->where('hardware_fingerprint', $fingerprint)->first();
+
+                if ($device) {
+                    $device->update([
+                        'org_id' => $orgId,
+                        'enrollment_status' => 'enrolled',
+                        'platform' => $request->platform,
+                        'last_seen_at' => Carbon::now(),
+                    ]);
+                } else {
+                    $device = Device::create([
+                        'org_id' => $orgId,
+                        'device_uid' => (string) \Illuminate\Support\Str::uuid(),
+                        'hardware_fingerprint' => $fingerprint,
+                        'platform' => $request->platform,
+                        'enrollment_status' => 'enrolled',
+                        'last_seen_at' => Carbon::now(),
+                    ]);
+                }
+
+                // If the token bundles a policy, assign it to the freshly enrolled device.
+                if ($enrollmentToken->policy_id) {
+                    $policy = Policy::withoutGlobalScopes()
+                        ->where('id', $enrollmentToken->policy_id)
+                        ->where('status', 'published')
+                        ->first();
+
+                    if ($policy) {
+                        PolicyAssignment::updateOrCreate(
+                            ['device_id' => $device->id],
+                            [
+                                'policy_id' => $policy->id,
+                                'assigned_at' => Carbon::now(),
+                                'status' => 'pending',
+                            ]
+                        );
+                    }
+                }
+
+                // Mark single-use tokens consumed within the same transaction as the state change.
+                if ($enrollmentToken->single_use) {
+                    $enrollmentToken->update(['used_at' => Carbon::now()]);
+                }
+
+                $customClaims = [
+                    'sub' => $device->id,
+                    'type' => 'device_token',
+                    'device_uid' => $device->device_uid,
+                    'org_id' => $orgId,
+                    'exp' => Carbon::now()->addYears(10)->timestamp, // long-lived
+                ];
+
+                $payload = JWTFactory::customClaims($customClaims)->make();
+                $deviceToken = JWTAuth::encode($payload)->get();
+
+                return [
+                    'status' => 200,
+                    'body' => [
+                        'device_id' => $device->id,
+                        'device_token' => $deviceToken,
+                    ],
+                ];
+            });
+        } catch (\Illuminate\Database\QueryException $e) {
+            return response()->json(['error' => 'Enrollment failed'], 500);
         }
 
-        $fingerprint = $request->hardware_fingerprint;
-        $orgId = $enrollmentToken->org_id;
-
-        // Check for duplicate enrollment attempts from the same hardware_fingerprint
-        $device = Device::withoutGlobalScopes()->where('hardware_fingerprint', $fingerprint)->first();
-
-        if ($device) {
-            // Update existing device
-            $device->update([
-                'org_id' => $orgId, // In case the org changed? Or just use current org.
-                'enrollment_status' => 'pending',
-                'platform' => $request->platform,
-                'last_seen_at' => Carbon::now(),
-            ]);
-        } else {
-            // Create a new device
-            $device = Device::create([
-                'org_id' => $orgId,
-                'device_uid' => (string) \Illuminate\Support\Str::uuid(),
-                'hardware_fingerprint' => $fingerprint,
-                'platform' => $request->platform,
-                'enrollment_status' => 'pending',
-                'last_seen_at' => Carbon::now(),
-            ]);
-        }
-
-        // Mark the token as used if it's single-use
-        // $enrollmentToken->update(['used_at' => Carbon::now()]);
-
-        // Generate a long-lived JWT for the device
-        $customClaims = [
-            'sub' => $device->id,
-            'type' => 'device_token',
-            'device_uid' => $device->device_uid,
-            'org_id' => $orgId,
-            'exp' => Carbon::now()->addYears(10)->timestamp // long-lived
-        ];
-        
-        $payload = JWTFactory::customClaims($customClaims)->make();
-        $deviceToken = JWTAuth::encode($payload)->get();
-
-        return response()->json([
-            'device_id' => $device->id,
-            'device_token' => $deviceToken,
-        ]);
+        return response()->json($result['body'], $result['status']);
     }
 
     /**
