@@ -50,15 +50,15 @@ class MainActivity : FlutterActivity() {
                         val blockHome = prefs.getBoolean("block_home", false)
 
                         if (!blockNotifications) {
-                            flags = flags or DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS
+                            flags = flags or 8 // LOCK_TASK_FEATURE_NOTIFICATIONS
                         }
                         if (!blockRecents) {
-                            flags = flags or DevicePolicyManager.LOCK_TASK_FEATURE_RECENTS
+                            flags = flags or 4 // LOCK_TASK_FEATURE_RECENTS
                         }
                         if (!blockHome) {
-                            flags = flags or DevicePolicyManager.LOCK_TASK_FEATURE_HOME
+                            flags = flags or 2 // LOCK_TASK_FEATURE_HOME
                         }
-                        flags = flags or DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
+                        flags = flags or 1 // LOCK_TASK_FEATURE_SYSTEM_INFO
                         dpm.setLockTaskFeatures(adminComponent, flags)
                     }
 
