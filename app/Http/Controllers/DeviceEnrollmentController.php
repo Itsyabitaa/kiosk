@@ -75,7 +75,7 @@ class DeviceEnrollmentController extends Controller
             'exp' => Carbon::now()->addYears(10)->timestamp // long-lived
         ];
         
-        $payload = JWTFactory::make($customClaims);
+        $payload = JWTFactory::customClaims($customClaims)->make();
         $deviceToken = JWTAuth::encode($payload)->get();
 
         return response()->json([
