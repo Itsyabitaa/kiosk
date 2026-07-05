@@ -69,6 +69,15 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/admin/rollouts/{id}/resume', [\App\Http\Controllers\RolloutController::class, 'resume']);
     Route::post('/admin/rollouts/{id}/complete', [\App\Http\Controllers\RolloutController::class, 'complete']);
     Route::post('/admin/rollouts/{id}/rollback', [\App\Http\Controllers\RolloutController::class, 'rollback']);
+
+    // Fleet analytics + alert feed
+    Route::get('/admin/fleet/stats', [\App\Http\Controllers\FleetController::class, 'stats']);
+    Route::get('/admin/alerts', [\App\Http\Controllers\FleetController::class, 'alerts']);
+    Route::post('/admin/alerts/{id}/ack', [\App\Http\Controllers\FleetController::class, 'ackAlert']);
+
+    // Per-device timeline + compliance exports
+    Route::get('/admin/devices/{id}/timeline', [\App\Http\Controllers\DeviceController::class, 'timeline']);
+    Route::get('/admin/groups/{id}/compliance-report', [\App\Http\Controllers\FleetController::class, 'complianceReport']);
 });
 
 // Broadcasting auth (JWT-based, supports both device and admin tokens)
