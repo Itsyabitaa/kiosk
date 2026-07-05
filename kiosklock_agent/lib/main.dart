@@ -6,10 +6,12 @@ import 'package:kiosklock_agent/core/command_channel_service.dart';
 import 'package:kiosklock_agent/core/kiosk_channel.dart';
 import 'package:kiosklock_agent/core/policy_sync_service.dart';
 import 'package:kiosklock_agent/core/secure_exit_manager.dart';
+import 'package:kiosklock_agent/core/setup_service.dart';
 import 'package:kiosklock_agent/core/telemetry_service.dart';
 import 'package:kiosklock_agent/features/browser/kiosk_browser_screen.dart';
 import 'package:kiosklock_agent/features/config/kiosk_config_screen.dart';
 import 'package:kiosklock_agent/features/launcher/kiosk_launcher_screen.dart';
+import 'package:kiosklock_agent/features/setup/setup_wizard.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +57,30 @@ class _StartupScreenState extends State<StartupScreen> {
   @override
   void initState() {
     super.initState();
-    _checkEnrollment();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await SecureExitManager.instance.seedDefaultPinIfNeeded();
+
+    final setupDone = await SetupService.instance.isComplete();
+    if (!mounted) return;
+
+    if (!setupDone) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => SetupWizard(onComplete: () {
+            if (!mounted) return;
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const StartupScreen()),
+            );
+          }),
+        ),
+      );
+      return;
+    }
+
+    await _checkEnrollment();
   }
 
   Future<void> _checkEnrollment() async {
