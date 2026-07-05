@@ -38,3 +38,23 @@ Route::post('/admin/devices/deployment-qr', [\App\Http\Controllers\DeviceDeploym
 Route::get('/devices/enroll-ios', [\App\Http\Controllers\DeviceDeploymentController::class, 'enrollIosDeepLink']);
 Route::post('/devices/{id}/reassign', [\App\Http\Controllers\DeviceDeploymentController::class, 'reassignPolicy']);
 
+/*
+|--------------------------------------------------------------------------
+| Sprint 10 — Fleet management (device groups, tags, real-time commands,
+| staged rollouts, telemetry, analytics, alerts, exports)
+|--------------------------------------------------------------------------
+*/
+
+// Device grouping + tags
+Route::middleware('auth:api')->group(function () {
+    Route::get('/admin/groups', [\App\Http\Controllers\DeviceGroupController::class, 'index']);
+    Route::post('/admin/groups', [\App\Http\Controllers\DeviceGroupController::class, 'store']);
+    Route::get('/admin/groups/{id}', [\App\Http\Controllers\DeviceGroupController::class, 'show']);
+    Route::post('/admin/groups/{id}/members', [\App\Http\Controllers\DeviceGroupController::class, 'addMembers']);
+    Route::delete('/admin/groups/{id}/members', [\App\Http\Controllers\DeviceGroupController::class, 'removeMembers']);
+    Route::post('/admin/groups/{id}/assign-policy', [\App\Http\Controllers\DeviceGroupController::class, 'assignPolicy']);
+
+    Route::post('/admin/devices/{id}/tags', [\App\Http\Controllers\DeviceController::class, 'addTag']);
+    Route::delete('/admin/devices/{id}/tags/{tag}', [\App\Http\Controllers\DeviceController::class, 'removeTag']);
+});
+
