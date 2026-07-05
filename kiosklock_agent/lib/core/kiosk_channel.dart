@@ -3,8 +3,11 @@ import 'package:flutter/services.dart';
 class KioskChannel {
   static const _channel = MethodChannel('com.kiosklock/kiosk');
 
-  static Future<bool> lockToApp(String packageName) async {
-    final result = await _channel.invokeMethod<bool>('lockToApp', {'package': packageName});
+  static Future<bool> lockToApp(String packageName, [Map<String, dynamic>? restrictions]) async {
+    final result = await _channel.invokeMethod<bool>('lockToApp', {
+      'package': packageName,
+      'restrictions': restrictions ?? {},
+    });
     return result ?? false;
   }
 

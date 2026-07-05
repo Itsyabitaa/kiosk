@@ -83,4 +83,79 @@ class DeviceEnrollmentController extends Controller
             'device_token' => $deviceToken,
         ]);
     }
+
+    /**
+     * Get the assigned policy for the authenticated device.
+     */
+    public function getPolicy(Request $request, $id)
+    {
+        try {
+            $payload = JWTAuth::parseToken()->getPayload();
+            $deviceId = $payload->get('sub');
+            $tokenType = $payload->get('type');
+
+            if ($tokenType !== 'device_token' || (string)$deviceId !== (string)$id) {
+                return response()->json(['error' => 'Unauthorized device'], 401);
+            }
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Invalid device token: ' . $e->getMessage()], 401);
+        }
+
+        $device = Device::withoutGlobalScopes()->findOrFail($id);
+        $assignment = PolicyAssignment::where('device_id', $device->id)->first();
+
+        if (!$assignment) {
+            return response()->json([
+                'policy' => null,
+            ]);
+        }
+
+        $policy = Policy::withoutGlobalScopes()->find($assignment->policy_id);
+
+        return response()->json([
+            'policy' => $policy,
+            'assignment_status' => $assignment->status,
+        ]);
+    }
+
+    /**
+     * Acknowledge the policy application by the device.
+     */
+    public function ackPolicy(Request $request, $id)
+    {
+        try {
+            $payload = JWTAuth::parseToken()->getPayload();
+            $deviceId = $payload->get('sub');
+            $tokenType = $payload->get('type');
+
+            if ($tokenType !== 'device_token' || (string)$deviceId !== (string)$id) {
+                return response()->json(['error' => 'Unauthorized device'], 401);
+            }
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Invalid device token: ' . $e->getMessage()], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'policy_id' => 'required|integer',
+            'status' => 'required|string|in:applied,error',
+            'error_message' => 'nullable|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $policyId = $request->input('policy_id');
+        $status = $request->input('status');
+
+        $assignment = PolicyAssignment::where('device_id', $deviceId)
+            ->where('policy_id', $policyId)
+            ->firstOrFail();
+
+        $assignment->update([
+            'status' => $status,
+        ]);
+
+        return response()->json(['success' => true]);
+    }
 }
