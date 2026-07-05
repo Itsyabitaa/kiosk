@@ -57,6 +57,53 @@ class KioskMethodChannelHandler(private val activity: Activity) : MethodCallHand
                             dpm.setLockTaskFeatures(adminComponent, flags)
                         }
 
+                        // Apply User Restrictions
+                        val blockFactoryReset = restrictions?.get("block_factory_reset") as? Boolean ?: true
+                        val blockDebugging = restrictions?.get("block_debugging_features") as? Boolean ?: true
+                        val blockInstall = restrictions?.get("block_install_apps") as? Boolean ?: true
+                        val blockUninstall = restrictions?.get("block_uninstall_apps") as? Boolean ?: true
+                        val hidePlayStore = restrictions?.get("hide_play_store") as? Boolean ?: false
+
+                        if (blockFactoryReset) {
+                            dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_FACTORY_RESET)
+                        } else {
+                            dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_FACTORY_RESET)
+                        }
+
+                        if (blockDebugging) {
+                            dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_DEBUGGING_FEATURES)
+                        } else {
+                            dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_DEBUGGING_FEATURES)
+                        }
+
+                        if (blockInstall) {
+                            dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_INSTALL_APPS)
+                        } else {
+                            dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_INSTALL_APPS)
+                        }
+
+                        if (blockUninstall) {
+                            dpm.addUserRestriction(adminComponent, UserManager.DISALLOW_UNINSTALL_APPS)
+                        } else {
+                            dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_UNINSTALL_APPS)
+                        }
+
+                        // Hide/Unhide Play Store
+                        try {
+                            dpm.setApplicationHidden(adminComponent, "com.android.vending", hidePlayStore)
+                        } catch (e: Exception) {
+                            // vending might not exist or be hideable
+                        }
+
+                        // Save target package and restrictions metadata to native SharedPreferences for boot recovery
+                        val prefs = activity.getSharedPreferences("kiosk_prefs", Context.MODE_PRIVATE)
+                        prefs.edit()
+                            .putString("locked_package", packageName)
+                            .putBoolean("block_notifications", blockNotifications)
+                            .putBoolean("block_recents", blockRecents)
+                            .putBoolean("block_home", blockHome)
+                            .apply()
+
                         // Save target package to watchdog
                         MainActivity.lockedPackageName = packageName
 
