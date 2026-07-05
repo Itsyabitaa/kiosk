@@ -78,4 +78,39 @@ class DeviceController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    /**
+     * Attach a tag to a device (tag-based grouping).
+     */
+    public function addTag(Request $request, $id)
+    {
+        $device = Device::findOrFail($id);
+
+        $validator = Validator::make($request->all(), [
+            'tag' => 'required|string|max:64',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $tag = DeviceTag::firstOrCreate([
+            'device_id' => $device->id,
+            'tag' => $request->input('tag'),
+        ]);
+
+        return response()->json($tag, 201);
+    }
+
+    /**
+     * Remove a tag from a device.
+     */
+    public function removeTag(Request $request, $id, $tag)
+    {
+        $device = Device::findOrFail($id);
+
+        DeviceTag::where('device_id', $device->id)->where('tag', $tag)->delete();
+
+        return response()->json(['success' => true]);
+    }
 }
