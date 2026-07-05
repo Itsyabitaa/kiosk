@@ -70,7 +70,15 @@ class PolicySyncService {
         Map<String, dynamic>.from(policy['restrictions'] ?? {});
 
     try {
-      if (policyType == 'single_app' && target != null && target.isNotEmpty) {
+      if (policyType == 'multi_app') {
+        final apps = List<Map<String, dynamic>>.from(
+            (restrictions['apps'] as List?)?.map((e) => Map<String, dynamic>.from(e as Map)) ?? []);
+        final packages = apps
+            .map((a) => (a['package'] as String?)?.trim() ?? '')
+            .where((p) => p.isNotEmpty)
+            .toList();
+        await KioskChannel.setKioskApps(packages, restrictions);
+      } else if (policyType == 'single_app' && target != null && target.isNotEmpty) {
         await KioskChannel.lockToApp(target, restrictions);
       } else if (policyType == 'url_whitelist') {
         await KioskChannel.lockToApp('com.kiosklock.kiosklock_agent', restrictions);

@@ -14,10 +14,14 @@ class SecureExitManager {
   SecureExitManager({Dio? dio})
       : _dio = dio ?? Dio(BaseOptions(baseUrl: Networking.apiBaseUrl));
 
+  /// Factory-default admin password for a fresh install. Matches the SureLock-style `0000`.
+  /// Operators should change this from the config panel after first setup.
+  static const String defaultPin = '0000';
+
   Future<void> seedDefaultPinIfNeeded() async {
     final currentPin = await _storage.read(key: 'exit_pin_hash');
     if (currentPin == null) {
-      final defaultPinHash = sha256.convert(utf8.encode('1234')).toString();
+      final defaultPinHash = sha256.convert(utf8.encode(defaultPin)).toString();
       await _storage.write(key: 'exit_pin_hash', value: defaultPinHash);
     }
   }

@@ -16,6 +16,50 @@ class KioskChannel {
     return result ?? false;
   }
 
+  /// Enter multi-app "home launcher" kiosk mode: whitelist [packages] for lock task and make
+  /// this app the device HOME. The user picks an app from our launcher grid.
+  static Future<bool> setKioskApps(
+    List<String> packages, [
+    Map<String, dynamic>? restrictions,
+  ]) async {
+    final result = await _channel.invokeMethod<bool>('setKioskApps', {
+      'packages': packages,
+      'restrictions': restrictions ?? {},
+    });
+    return result ?? false;
+  }
+
+  /// Launch an approved app by package name (used by the kiosk launcher tiles).
+  static Future<bool> launchApp(String packageName) async {
+    try {
+      final result = await _channel.invokeMethod<bool>('launchApp', {
+        'package': packageName,
+      });
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Returns launchable apps installed on the device as maps of
+  /// `{package, label, icon}` where `icon` is a base64-encoded PNG. Used by the admin picker
+  /// and the launcher to render app tiles.
+  static Future<List<Map<String, dynamic>>> getInstalledApps() async {
+    try {
+      final result = await _channel.invokeListMethod<dynamic>('getInstalledApps');
+      if (result == null) return [];
+      return result
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList(growable: false);
+    } on PlatformException {
+      return [];
+    } on MissingPluginException {
+      return [];
+    }
+  }
+
   /// Remotely reboot the device (device-owner only).
   static Future<bool> reboot() async {
     try {
