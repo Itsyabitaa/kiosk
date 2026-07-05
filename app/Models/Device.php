@@ -18,6 +18,10 @@ class Device extends Model
         'last_seen_at',
     ];
 
+    protected $casts = [
+        'last_seen_at' => 'datetime',
+    ];
+
     /**
      * Get the policy assignment for this device.
      */
