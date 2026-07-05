@@ -40,4 +40,12 @@ class Device extends Model
             'policy_id'
         );
     }
+
+    /**
+     * Get the events logged for this device.
+     */
+    public function events()
+    {
+        return $this->hasMany(DeviceEvent::class, 'device_id');
+    }
 }

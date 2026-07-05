@@ -27,3 +27,4 @@ Route::post('/admin/policies/{id}/assign', [\App\Http\Controllers\PolicyControll
 
 Route::get('/devices/{id}/policy', [DeviceEnrollmentController::class, 'getPolicy']);
 Route::post('/devices/{id}/policy-ack', [DeviceEnrollmentController::class, 'ackPolicy']);
+Route::post('/devices/{id}/events', [DeviceEnrollmentController::class, 'logEvent']);
