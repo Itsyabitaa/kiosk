@@ -62,24 +62,23 @@ class MultiTenancyTest extends TestCase
         ]);
 
         // 4. Authenticate as Admin A
-        $tokenA = JWTAuth::fromUser($adminA);
+        auth('api')->login($adminA);
 
         // 5. Get devices as Admin A
-        $responseA = $this->withHeaders([
-            'Authorization' => "Bearer $tokenA",
-        ])->getJson('/api/admin/devices');
+        $responseA = $this->getJson('/api/admin/devices');
 
         $responseA->assertStatus(200);
         $responseA->assertJsonFragment(['device_uid' => 'device-uid-a']);
         $responseA->assertJsonMissing(['device_uid' => 'device-uid-b']);
 
+        // Logout Admin A
+        auth('api')->logout();
+
         // 6. Authenticate as Admin B
-        $tokenB = JWTAuth::fromUser($adminB);
+        auth('api')->login($adminB);
 
         // 7. Get devices as Admin B
-        $responseB = $this->withHeaders([
-            'Authorization' => "Bearer $tokenB",
-        ])->getJson('/api/admin/devices');
+        $responseB = $this->getJson('/api/admin/devices');
 
         $responseB->assertStatus(200);
         $responseB->assertJsonFragment(['device_uid' => 'device-uid-b']);
