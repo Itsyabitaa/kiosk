@@ -126,15 +126,113 @@ class _EnrollmentScreenState extends State<EnrollmentScreen> {
   }
 }
 
-class PolicySyncScreen extends StatelessWidget {
+import 'package:kiosklock_agent/core/secure_exit_manager.dart';
+
+class PolicySyncScreen extends StatefulWidget {
   const PolicySyncScreen({super.key});
+
+  @override
+  State<PolicySyncScreen> createState() => _PolicySyncScreenState();
+}
+
+class _PolicySyncScreenState extends State<PolicySyncScreen> {
+  int _tapCount = 0;
+  DateTime? _firstTapTime;
+
+  void _handleTap() {
+    final now = DateTime.now();
+    if (_firstTapTime == null || now.difference(_firstTapTime!) > const Duration(seconds: 3)) {
+      _firstTapTime = now;
+      _tapCount = 1;
+    } else {
+      _tapCount++;
+      if (_tapCount >= 5) {
+        _tapCount = 0;
+        _firstTapTime = null;
+        _showPinDialog();
+      }
+    }
+  }
+
+  void _showPinDialog() {
+    final pinController = TextEditingController();
+    String? errorMessage;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Exit Kiosk Mode'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12.0),
+                      child: Text(
+                        errorMessage!,
+                        style: const TextStyle(color: Colors.red, fontSize: 13),
+                      ),
+                    ),
+                  TextField(
+                    controller: pinController,
+                    decoration: const InputDecoration(labelText: 'Enter PIN'),
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    try {
+                      final success = await SecureExitManager.instance.verifyAndExit(pinController.text);
+                      if (success && mounted) {
+                        Navigator.of(context).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Kiosk Mode exited successfully.')),
+                        );
+                      }
+                    } catch (e) {
+                      setState(() {
+                        errorMessage = e.toString().replaceAll('Exception: ', '');
+                      });
+                    }
+                  },
+                  child: const Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Syncing Policies...')),
-      body: const Center(
-        child: Text('Device is enrolled. Waiting for policies...'),
+      body: GestureDetector(
+        onTap: _handleTap,
+        behavior: HitTestBehavior.opaque,
+        child: const Center(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Text(
+              'Device is enrolled. Waiting for policies...\n\n(Tap screen 5 times in 3 seconds to exit)',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16),
+            ),
+          ),
+        ),
       ),
     );
   }
