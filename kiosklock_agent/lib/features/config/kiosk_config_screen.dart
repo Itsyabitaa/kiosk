@@ -28,6 +28,7 @@ class _KioskConfigScreenState extends State<KioskConfigScreen> {
 
   bool _loading = true;
   bool _saving = false;
+  bool _allowSubdomains = false;
   String? _error;
 
   static const _appPresets = <String, String>{
