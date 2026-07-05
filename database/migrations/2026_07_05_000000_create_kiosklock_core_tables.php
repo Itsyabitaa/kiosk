@@ -58,10 +58,19 @@ return new class extends Migration
         Schema::create('enrollment_tokens', function (Blueprint $table) {
             $table->id();
             $table->foreignId('org_id')->constrained('organizations')->cascadeOnDelete();
+            // Policy bundled into the QR payload so a scanned device is provisioned to
+            // the correct policy without a second round trip.
+            $table->foreignId('policy_id')->nullable()->constrained('policies')->nullOnDelete();
             $table->string('token')->unique();
+            // When true a token may only ever transition used_at from null -> timestamp once.
+            $table->boolean('single_use')->default(true);
             $table->timestamp('expires_at')->nullable();
             $table->timestamp('used_at')->nullable();
             $table->timestamps();
+
+            // Supports the single-use guard: locating an unused, unexpired token quickly and
+            // enforcing that a given token is only ever consumed by one device.
+            $table->index(['token', 'used_at']);
         });
     }
 
