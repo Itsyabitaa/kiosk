@@ -44,13 +44,21 @@ class BroadcastAuthController extends Controller
     {
         $type = $payload->get('type');
 
-        if ($type === 'device_token' && preg_match('/^private-device\.(\d+)$/', $channel, $m)) {
-            return (string) $payload->get('sub') === $m[1];
+        if ($type === 'device_token') {
+            return preg_match('/^private-device\.(\d+)$/', $channel, $m)
+                && (string) $payload->get('sub') === $m[1];
         }
 
-        // Admin token (no device_token type). Match org channel.
-        if ($type !== 'device_token' && preg_match('/^private-org\.(\d+)$/', $channel, $m)) {
-            return (string) $payload->get('org_id') === $m[1];
+        // Admin token: resolve the org from the authenticated admin model so we don't depend on
+        // a specific claim shape.
+        if (preg_match('/^private-org\.(\d+)$/', $channel, $m)) {
+            $orgId = $payload->get('org_id');
+            if ($orgId === null) {
+                $admin = auth('api')->user();
+                $orgId = $admin?->org_id;
+            }
+
+            return $orgId !== null && (string) $orgId === $m[1];
         }
 
         return false;
