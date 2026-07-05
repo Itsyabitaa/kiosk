@@ -24,3 +24,6 @@ Route::post('/admin/policies', [\App\Http\Controllers\PolicyController::class, '
 Route::put('/admin/policies/{id}', [\App\Http\Controllers\PolicyController::class, 'update'])->middleware('auth:api');
 Route::patch('/admin/policies/{id}/publish', [\App\Http\Controllers\PolicyController::class, 'publish'])->middleware('auth:api');
 Route::post('/admin/policies/{id}/assign', [\App\Http\Controllers\PolicyController::class, 'assign'])->middleware('auth:api');
+
+Route::get('/devices/{id}/policy', [DeviceEnrollmentController::class, 'getPolicy']);
+Route::post('/devices/{id}/policy-ack', [DeviceEnrollmentController::class, 'ackPolicy']);
