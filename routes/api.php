@@ -17,3 +17,10 @@ Route::group([
 Route::post('/enroll', [DeviceEnrollmentController::class, 'enroll']);
 
 Route::get('/admin/devices', [\App\Http\Controllers\DeviceController::class, 'index'])->middleware('auth:api');
+Route::get('/admin/devices/{id}', [\App\Http\Controllers\DeviceController::class, 'show'])->middleware('auth:api');
+
+Route::get('/admin/policies', [\App\Http\Controllers\PolicyController::class, 'index'])->middleware('auth:api');
+Route::post('/admin/policies', [\App\Http\Controllers\PolicyController::class, 'store'])->middleware('auth:api');
+Route::put('/admin/policies/{id}', [\App\Http\Controllers\PolicyController::class, 'update'])->middleware('auth:api');
+Route::patch('/admin/policies/{id}/publish', [\App\Http\Controllers\PolicyController::class, 'publish'])->middleware('auth:api');
+Route::post('/admin/policies/{id}/assign', [\App\Http\Controllers\PolicyController::class, 'assign'])->middleware('auth:api');
