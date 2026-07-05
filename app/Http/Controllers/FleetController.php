@@ -98,4 +98,87 @@ class FleetController extends Controller
 
         return response()->json($alert);
     }
+
+    /**
+     * Export a compliance report for a device group as CSV (default) or PDF. Useful for
+     * customers with audit/compliance requirements.
+     */
+    public function complianceReport(Request $request, $id)
+    {
+        $group = DeviceGroup::findOrFail($id);
+        $format = $request->query('format', 'csv');
+
+        $rows = $this->buildComplianceRows($group);
+
+        if ($format === 'pdf') {
+            $pdf = Pdf::loadView('reports.compliance', [
+                'group' => $group,
+                'rows' => $rows,
+                'generatedAt' => Carbon::now()->toDayDateTimeString(),
+            ]);
+
+            return $pdf->download("compliance-group-{$group->id}.pdf");
+        }
+
+        return $this->streamCsv($group, $rows);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildComplianceRows(DeviceGroup $group): array
+    {
+        $devices = $group->devices()
+            ->with(['assignedPolicy', 'policyAssignment'])
+            ->get();
+
+        return $devices->map(function (Device $device) {
+            $assignment = $device->policyAssignment;
+            $policy = $device->assignedPolicy;
+
+            $applied = $assignment?->applied_version;
+            $assigned = $policy?->version;
+
+            if ($assigned === null) {
+                $compliance = 'no_policy';
+            } elseif ($applied === null) {
+                $compliance = 'unknown';
+            } elseif ((int) $applied === (int) $assigned) {
+                $compliance = 'compliant';
+            } else {
+                $compliance = 'non_compliant';
+            }
+
+            return [
+                'device_uid' => $device->device_uid,
+                'platform' => $device->platform,
+                'enrollment_status' => $device->enrollment_status,
+                'last_seen_at' => optional($device->last_seen_at)->toIso8601String(),
+                'policy_name' => $policy?->name,
+                'assigned_version' => $assigned,
+                'applied_version' => $applied,
+                'compliance' => $compliance,
+            ];
+        })->all();
+    }
+
+    private function streamCsv(DeviceGroup $group, array $rows): StreamedResponse
+    {
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' => "attachment; filename=\"compliance-group-{$group->id}.csv\"",
+        ];
+
+        $columns = ['device_uid', 'platform', 'enrollment_status', 'last_seen_at', 'policy_name', 'assigned_version', 'applied_version', 'compliance'];
+
+        return response()->stream(function () use ($rows, $columns) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, $columns);
+            foreach ($rows as $row) {
+                fputcsv($out, array_map(fn ($c) => $row[$c] ?? '', $columns));
+            }
+            fclose($out);
+        }, 200, $headers);
+    }
 }
+
