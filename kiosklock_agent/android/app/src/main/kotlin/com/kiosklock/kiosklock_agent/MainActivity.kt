@@ -4,6 +4,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -33,6 +34,12 @@ class MainActivity : FlutterActivity() {
 
         // Native boot persistence recovery
         val prefs = getSharedPreferences("kiosk_prefs", Context.MODE_PRIVATE)
+        val launcherMode = prefs.getBoolean("launcher_mode", false)
+        if (launcherMode) {
+            restoreLauncherMode(prefs)
+            return
+        }
+
         val savedPackage = prefs.getString("locked_package", null)
         if (savedPackage != null) {
             lockedPackageName = savedPackage
@@ -84,6 +91,47 @@ class MainActivity : FlutterActivity() {
                     // Ignore
                 }
             }
+        }
+    }
+
+    private fun restoreLauncherMode(prefs: android.content.SharedPreferences) {
+        // In launcher mode our own app is the HOME; re-whitelist the approved apps and re-assert
+        // the persistent HOME preference so the kiosk survives reboot.
+        lockedPackageName = packageName
+        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        if (!dpm.isDeviceOwnerApp(packageName)) return
+        try {
+            val adminComponent = ComponentName(this, KioskDeviceAdminReceiver::class.java)
+            val saved = prefs.getString("kiosk_apps", "") ?: ""
+            val pkgs = saved.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            val allowed = (pkgs + packageName).distinct().toTypedArray()
+            dpm.setLockTaskPackages(adminComponent, allowed)
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                var flags = 1 // LOCK_TASK_FEATURE_SYSTEM_INFO
+                flags = flags or 2 // LOCK_TASK_FEATURE_HOME
+                dpm.setLockTaskFeatures(adminComponent, flags)
+            }
+
+            try {
+                val homeFilter = IntentFilter(Intent.ACTION_MAIN)
+                homeFilter.addCategory(Intent.CATEGORY_HOME)
+                homeFilter.addCategory(Intent.CATEGORY_DEFAULT)
+                dpm.addPersistentPreferredActivity(
+                    adminComponent, homeFilter, ComponentName(this, MainActivity::class.java)
+                )
+            } catch (e: Exception) {}
+
+            val serviceIntent = Intent(this, KioskWatchdogService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+
+            startLockTask()
+        } catch (e: Exception) {
+            // Ignore
         }
     }
 
