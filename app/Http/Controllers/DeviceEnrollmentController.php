@@ -359,6 +359,12 @@ class DeviceEnrollmentController extends Controller
             ->where('status', 'pending')
             ->get();
 
+        // Mark as delivered the first time the device sees them (poll fallback receipt).
+        \App\Models\MdmCommand::where('device_id', $id)
+            ->where('status', 'pending')
+            ->whereNull('delivered_at')
+            ->update(['delivered_at' => Carbon::now()]);
+
         return response()->json(['commands' => $commands]);
     }
 
