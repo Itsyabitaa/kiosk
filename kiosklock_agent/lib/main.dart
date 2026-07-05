@@ -325,8 +325,9 @@ class _MockQrScannerSheetState extends State<_MockQrScannerSheet> {
       await _repository.reassignPolicy(token);
       PolicySyncService.instance.syncPolicy();
       if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('Policy reassigned from scanned QR.')),
       );
     } catch (e) {
