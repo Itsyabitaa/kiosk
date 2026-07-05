@@ -56,4 +56,29 @@ class Device extends Model
     {
         return $this->hasMany(MdmCommand::class, 'device_id');
     }
+
+    /**
+     * Groups this device explicitly belongs to.
+     */
+    public function groups()
+    {
+        return $this->belongsToMany(DeviceGroup::class, 'device_group_memberships', 'device_id', 'group_id')
+            ->withTimestamps();
+    }
+
+    /**
+     * Free-form tags applied to this device.
+     */
+    public function tags()
+    {
+        return $this->hasMany(DeviceTag::class, 'device_id');
+    }
+
+    /**
+     * Telemetry snapshots reported by this device.
+     */
+    public function telemetry()
+    {
+        return $this->hasMany(DeviceTelemetry::class, 'device_id');
+    }
 }
