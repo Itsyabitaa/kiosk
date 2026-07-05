@@ -108,6 +108,11 @@ class DeviceEnrollmentController extends Controller
                 $payload = JWTFactory::customClaims($customClaims)->make();
                 $deviceToken = JWTAuth::encode($payload)->get();
 
+                // The JWT factory is a shared singleton; its custom claims persist across calls.
+                // Reset them so device-only claims (e.g. type=device_token) never leak onto other
+                // tokens minted later in the same process (Octane / queue workers / tests).
+                JWTFactory::customClaims([]);
+
                 return [
                     'status' => 200,
                     'body' => [
