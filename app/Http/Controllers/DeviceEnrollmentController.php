@@ -425,7 +425,7 @@ class DeviceEnrollmentController extends Controller
 
         // Notify the org dashboard of per-device delivery confirmation (rollout progress etc.).
         if ($device) {
-            broadcast(new \App\Events\DeviceDeliveryConfirmed($command->fresh(), (int) $device->org_id));
+            event(new \App\Events\DeviceDeliveryConfirmed($command->fresh(), (int) $device->org_id));
 
             // If this ack completes a rollout wave command, advance rollout progress.
             if ($command->rollout_id) {
