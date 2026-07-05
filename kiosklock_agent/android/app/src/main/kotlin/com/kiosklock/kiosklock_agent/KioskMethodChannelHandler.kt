@@ -34,25 +34,25 @@ class KioskMethodChannelHandler(private val activity: Activity) : MethodCallHand
                         dpm.setLockTaskPackages(adminComponent, arrayOf(packageName, activity.packageName))
 
                         // Configure allowed lock-task features driven by flags passed from Dart
+                        val blockNotifications = restrictions?.get("block_notifications") as? Boolean ?: true
+                        val blockRecents = restrictions?.get("block_recents") as? Boolean ?: true
+                        val blockHome = restrictions?.get("block_home") as? Boolean ?: false
+
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                             var flags = 0
-                            
-                            val blockNotifications = restrictions?.get("block_notifications") as? Boolean ?: true
-                            val blockRecents = restrictions?.get("block_recents") as? Boolean ?: true
-                            val blockHome = restrictions?.get("block_home") as? Boolean ?: false
 
                             if (!blockNotifications) {
-                                flags = flags or DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS
+                                flags = flags or 8 // LOCK_TASK_FEATURE_NOTIFICATIONS
                             }
                             if (!blockRecents) {
-                                flags = flags or DevicePolicyManager.LOCK_TASK_FEATURE_RECENTS
+                                flags = flags or 4 // LOCK_TASK_FEATURE_RECENTS
                             }
                             if (!blockHome) {
-                                flags = flags or DevicePolicyManager.LOCK_TASK_FEATURE_HOME
+                                flags = flags or 2 // LOCK_TASK_FEATURE_HOME
                             }
 
                             // Always allow system info
-                            flags = flags or DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
+                            flags = flags or 1 // LOCK_TASK_FEATURE_SYSTEM_INFO
 
                             dpm.setLockTaskFeatures(adminComponent, flags)
                         }
