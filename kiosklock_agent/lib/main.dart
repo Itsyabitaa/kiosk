@@ -3,6 +3,7 @@ import 'package:kiosklock_agent/features/enrollment/enrollment_repository.dart';
 
 import 'package:kiosklock_agent/core/policy_sync_service.dart';
 import 'package:kiosklock_agent/core/secure_exit_manager.dart';
+import 'package:kiosklock_agent/features/browser/kiosk_browser_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -217,22 +218,42 @@ class _PolicySyncScreenState extends State<PolicySyncScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Syncing Policies...')),
-      body: GestureDetector(
-        onTap: _handleTap,
-        behavior: HitTestBehavior.opaque,
-        child: const Center(
-          child: Padding(
-            padding: EdgeInsets.all(24.0),
-            child: Text(
-              'Device is enrolled. Waiting for policies...\n\n(Tap screen 5 times in 3 seconds to exit)',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16),
+    return ValueListenableBuilder<Map<String, dynamic>?>(
+      valueListenable: PolicySyncService.instance.activePolicyNotifier,
+      builder: (context, policy, _) {
+        if (policy != null && policy['policy_type'] == 'url_whitelist') {
+          final restrictions = Map<String, dynamic>.from(policy['restrictions'] ?? {});
+          final String homeUrl = policy['target'] ?? '';
+          final List<String> allowedDomains = List<String>.from(restrictions['allowed_domains'] ?? []);
+          final int idleTimeout = restrictions['idle_timeout_minutes'] ?? 5;
+          final int refreshInterval = restrictions['refresh_interval_minutes'] ?? 0;
+
+          return KioskBrowserScreen(
+            homeUrl: homeUrl,
+            allowedDomains: allowedDomains,
+            idleTimeoutMinutes: idleTimeout,
+            refreshIntervalMinutes: refreshInterval,
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(title: const Text('Syncing Policies...')),
+          body: GestureDetector(
+            onTap: _handleTap,
+            behavior: HitTestBehavior.opaque,
+            child: const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Text(
+                  'Device is enrolled. Waiting for policies...\n\n(Tap screen 5 times in 3 seconds to exit)',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 16),
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
