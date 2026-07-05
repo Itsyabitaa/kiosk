@@ -1,28 +1,128 @@
 package com.kiosklock.kiosklock_agent
 
+import android.app.Activity
+import android.app.ActivityManager
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.os.Build
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 
-class KioskMethodChannelHandler : MethodCallHandler {
+class KioskMethodChannelHandler(private val activity: Activity) : MethodCallHandler {
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
             "lockToApp" -> {
-                // TODO: Implement actual lock logic
-                result.success(false)
+                val packageName = call.argument<String>("package")
+                val restrictions = call.argument<Map<String, Any>>("restrictions")
+                
+                if (packageName == null) {
+                    result.error("BAD_ARGS", "Package name is required", null)
+                    return
+                }
+
+                try {
+                    val dpm = activity.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                    val adminComponent = ComponentName(activity, KioskDeviceAdminReceiver::class.java)
+
+                    if (dpm.isDeviceOwnerApp(activity.packageName)) {
+                        // Configure allowed packages
+                        dpm.setLockTaskPackages(adminComponent, arrayOf(packageName, activity.packageName))
+
+                        // Configure allowed lock-task features driven by flags passed from Dart
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            var flags = 0
+                            
+                            val blockNotifications = restrictions?.get("block_notifications") as? Boolean ?: true
+                            val blockRecents = restrictions?.get("block_recents") as? Boolean ?: true
+                            val blockHome = restrictions?.get("block_home") as? Boolean ?: false
+
+                            if (!blockNotifications) {
+                                flags = flags or DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS
+                            }
+                            if (!blockRecents) {
+                                flags = flags or DevicePolicyManager.LOCK_TASK_FEATURE_RECENTS
+                            }
+                            if (!blockHome) {
+                                flags = flags or DevicePolicyManager.LOCK_TASK_FEATURE_HOME
+                            }
+
+                            // Always allow system info
+                            flags = flags or DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO
+
+                            dpm.setLockTaskFeatures(adminComponent, flags)
+                        }
+
+                        // Save target package to watchdog
+                        MainActivity.lockedPackageName = packageName
+
+                        // Launch target app if it's different from our app
+                        if (packageName != activity.packageName) {
+                            val launchIntent = activity.packageManager.getLaunchIntentForPackage(packageName)
+                            if (launchIntent != null) {
+                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                activity.startActivity(launchIntent)
+                            } else {
+                                result.error("NOT_INSTALLED", "Package $packageName is not installed on device", null)
+                                return
+                            }
+                        }
+
+                        // Start Lock Task Mode
+                        activity.startLockTask()
+                        result.success(true)
+                    } else {
+                        // Fallback to basic screen pinning if not Device Owner
+                        MainActivity.lockedPackageName = packageName
+                        if (packageName != activity.packageName) {
+                            val launchIntent = activity.packageManager.getLaunchIntentForPackage(packageName)
+                            if (launchIntent != null) {
+                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                activity.startActivity(launchIntent)
+                            } else {
+                                result.error("NOT_INSTALLED", "Package $packageName is not installed on device", null)
+                                return
+                            }
+                        }
+                        activity.startLockTask()
+                        result.success(false)
+                    }
+                } catch (e: Exception) {
+                    result.error("LOCK_FAILED", e.message, null)
+                }
             }
             "unlock" -> {
-                // TODO: Implement unlock logic
-                result.success(false)
-            }
-            "applyRestrictions" -> {
-                // TODO: Implement restriction logic
-                result.success(false)
+                try {
+                    MainActivity.lockedPackageName = null
+                    activity.stopLockTask()
+                    result.success(true)
+                } catch (e: Exception) {
+                    result.error("UNLOCK_FAILED", e.message, null)
+                }
             }
             "getDeviceState" -> {
-                // TODO: Implement state fetching logic
-                result.success(emptyMap<String, Any>())
+                try {
+                    val dpm = activity.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                    val isOwner = dpm.isDeviceOwnerApp(activity.packageName)
+                    
+                    val activityManager = activity.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+                    val lockTaskState = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        activityManager.lockTaskModeState
+                    } else {
+                        if (activityManager.isInLockTaskMode) 1 else 0
+                    }
+                    val isLocked = lockTaskState != ActivityManager.LOCK_TASK_MODE_NONE
+
+                    result.success(mapOf(
+                        "isDeviceOwner" to isOwner,
+                        "isLocked" to isLocked
+                    ))
+                } catch (e: Exception) {
+                    result.error("STATE_FAILED", e.message, null)
+                }
             }
             else -> {
                 result.notImplemented()
