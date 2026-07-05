@@ -25,4 +25,20 @@ class KioskChannel {
     final result = await _channel.invokeMapMethod<String, dynamic>('getDeviceState');
     return result ?? {};
   }
+
+  /// Returns the admin extras bundle (enrollment_token, policy_id, ...) captured during
+  /// QR/NFC device-owner provisioning, or null when the device was not provisioned via QR.
+  static Future<Map<String, dynamic>?> getAdminExtras() async {
+    try {
+      final result = await _channel.invokeMapMethod<String, dynamic>('getAdminExtras');
+      if (result == null || result['enrollment_token'] == null) {
+        return null;
+      }
+      return result;
+    } on PlatformException {
+      return null;
+    } on MissingPluginException {
+      return null;
+    }
+  }
 }

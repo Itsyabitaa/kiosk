@@ -73,4 +73,35 @@ class EnrollmentRepository {
     final token = await _storage.read(key: 'device_token');
     return token != null && token.isNotEmpty;
   }
+
+  /// Re-provision the currently enrolled device to a new policy using a scanned QR token.
+  /// Used by the in-app scanner sheet to move an already enrolled device onto a new policy.
+  Future<void> reassignPolicy(String scannedToken) async {
+    final deviceId = await _storage.read(key: 'device_id');
+    final deviceToken = await _storage.read(key: 'device_token');
+
+    if (deviceId == null || deviceToken == null) {
+      throw Exception('Device is not enrolled');
+    }
+
+    try {
+      final response = await _dio.post(
+        '/devices/$deviceId/reassign',
+        data: {'token': scannedToken},
+        options: Options(headers: {'Authorization': 'Bearer $deviceToken'}),
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Reassignment failed: ${response.statusCode}');
+      }
+    } on DioException catch (e) {
+      if (e.response?.data is Map) {
+        final data = e.response!.data as Map;
+        if (data.containsKey('error')) {
+          throw Exception(data['error']);
+        }
+      }
+      throw Exception(e.message ?? 'Network error during reassignment');
+    }
+  }
 }
