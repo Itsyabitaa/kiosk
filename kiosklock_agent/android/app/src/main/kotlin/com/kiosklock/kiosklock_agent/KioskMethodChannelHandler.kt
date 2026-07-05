@@ -119,6 +119,14 @@ class KioskMethodChannelHandler(private val activity: Activity) : MethodCallHand
                             }
                         }
 
+                        // Start KioskWatchdogService
+                        val serviceIntent = Intent(activity, KioskWatchdogService::class.java)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            activity.startForegroundService(serviceIntent)
+                        } else {
+                            activity.startService(serviceIntent)
+                        }
+
                         // Start Lock Task Mode
                         activity.startLockTask()
                         result.success(true)
@@ -146,6 +154,27 @@ class KioskMethodChannelHandler(private val activity: Activity) : MethodCallHand
                 try {
                     MainActivity.lockedPackageName = null
                     activity.stopLockTask()
+
+                    // Clear restrictions and SharedPreferences
+                    val dpm = activity.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                    val adminComponent = ComponentName(activity, KioskDeviceAdminReceiver::class.java)
+                    if (dpm.isDeviceOwnerApp(activity.packageName)) {
+                        dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_FACTORY_RESET)
+                        dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_DEBUGGING_FEATURES)
+                        dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_INSTALL_APPS)
+                        dpm.clearUserRestriction(adminComponent, UserManager.DISALLOW_UNINSTALL_APPS)
+                        try {
+                            dpm.setApplicationHidden(adminComponent, "com.android.vending", false)
+                        } catch (e: Exception) {}
+                    }
+
+                    val prefs = activity.getSharedPreferences("kiosk_prefs", Context.MODE_PRIVATE)
+                    prefs.edit().clear().apply()
+
+                    // Stop KioskWatchdogService
+                    val serviceIntent = Intent(activity, KioskWatchdogService::class.java)
+                    activity.stopService(serviceIntent)
+
                     result.success(true)
                 } catch (e: Exception) {
                     result.error("UNLOCK_FAILED", e.message, null)

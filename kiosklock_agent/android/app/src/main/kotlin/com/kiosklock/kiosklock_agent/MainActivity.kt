@@ -70,6 +70,15 @@ class MainActivity : FlutterActivity() {
                             startActivity(launchIntent)
                         }
                     }
+
+                    // Start KioskWatchdogService
+                    val serviceIntent = Intent(this, KioskWatchdogService::class.java)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(serviceIntent)
+                    } else {
+                        startService(serviceIntent)
+                    }
+
                     startLockTask()
                 } catch (e: Exception) {
                     // Ignore
