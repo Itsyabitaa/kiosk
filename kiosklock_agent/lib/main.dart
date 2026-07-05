@@ -82,6 +82,8 @@ class _EnrollmentScreenState extends State<EnrollmentScreen> {
     setState(() => _isLoading = true);
     try {
       await _repository.enroll(_tokenController.text);
+      // Trigger an immediate policy sync check now that we have a device token
+      PolicySyncService.instance.syncPolicy();
       if (!mounted) return;
       Navigator.of(context).pushReplacement(MaterialPageRoute(
         builder: (_) => const PolicySyncScreen(),
