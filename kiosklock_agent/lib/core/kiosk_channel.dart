@@ -16,6 +16,30 @@ class KioskChannel {
     return result ?? false;
   }
 
+  /// Remotely reboot the device (device-owner only).
+  static Future<bool> reboot() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('reboot');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
+  /// Remotely factory-wipe the device (device-owner only). Destructive.
+  static Future<bool> wipe() async {
+    try {
+      final result = await _channel.invokeMethod<bool>('wipe');
+      return result ?? false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   static Future<bool> applyRestrictions(Map<String, dynamic> restrictions) async {
     final result = await _channel.invokeMethod<bool>('applyRestrictions', restrictions);
     return result ?? false;
