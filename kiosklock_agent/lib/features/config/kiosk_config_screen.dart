@@ -125,6 +125,14 @@ class _KioskConfigScreenState extends State<KioskConfigScreen> {
           if (host.isNotEmpty) domains = [host];
         }
 
+        // "Allow sub-domains" → store each host as a wildcard entry (*.host). The kiosk browser's
+        // matcher treats *.example.com as matching example.com and any sub-domain of it.
+        if (_allowSubdomains) {
+          domains = domains
+              .map((d) => d.startsWith('*.') ? d : '*.${d.replaceFirst(RegExp(r'^\*\.'), '')}')
+              .toList();
+        }
+
         final idle = int.tryParse(_idleController.text.trim()) ?? 5;
 
         policy = {
@@ -360,6 +368,15 @@ class _KioskConfigScreenState extends State<KioskConfigScreen> {
           hintText: 'left blank = only the URL\'s domain',
           border: OutlineInputBorder(),
         ),
+      ),
+      const SizedBox(height: 4),
+      CheckboxListTile(
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        value: _allowSubdomains,
+        onChanged: (v) => setState(() => _allowSubdomains = v ?? false),
+        title: const Text('Allow sub-domains'),
+        subtitle: const Text('Permit any sub-domain of the allowed domains (e.g. app.example.com)'),
       ),
       const SizedBox(height: 12),
       TextField(
