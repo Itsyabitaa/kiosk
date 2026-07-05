@@ -2,13 +2,14 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
+import 'package:kiosklock_agent/core/networking.dart';
 
 class EnrollmentRepository {
   final Dio _dio;
   final FlutterSecureStorage _storage;
 
   EnrollmentRepository({Dio? dio, FlutterSecureStorage? storage})
-      : _dio = dio ?? Dio(BaseOptions(baseUrl: 'http://localhost/api')),
+      : _dio = dio ?? Dio(BaseOptions(baseUrl: Networking.apiBaseUrl)),
         _storage = storage ?? const FlutterSecureStorage();
 
   Future<void> enroll(String token) async {
