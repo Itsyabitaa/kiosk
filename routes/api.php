@@ -56,5 +56,12 @@ Route::middleware('auth:api')->group(function () {
 
     Route::post('/admin/devices/{id}/tags', [\App\Http\Controllers\DeviceController::class, 'addTag']);
     Route::delete('/admin/devices/{id}/tags/{tag}', [\App\Http\Controllers\DeviceController::class, 'removeTag']);
+
+    // Real-time remote commands
+    Route::post('/admin/devices/{id}/commands', [\App\Http\Controllers\DeviceCommandController::class, 'issueToDevice']);
+    Route::post('/admin/groups/{id}/commands', [\App\Http\Controllers\DeviceCommandController::class, 'issueToGroup']);
 });
+
+// Broadcasting auth (JWT-based, supports both device and admin tokens)
+Route::post('/broadcasting/auth', [\App\Http\Controllers\BroadcastAuthController::class, 'authenticate']);
 
