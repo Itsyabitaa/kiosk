@@ -12,15 +12,13 @@ class EnrollmentRepository {
         _storage = storage ?? const FlutterSecureStorage();
 
   Future<void> enroll(String token) async {
-    int maxRetries = 3;
+    const int maxRetries = 5;
     int retryCount = 0;
     int delay = 2; // seconds
 
-    while (retryCount <= maxRetries) {
+    while (true) {
       try {
         String platform = kIsWeb ? 'web' : (Platform.isAndroid ? 'android' : (Platform.isIOS ? 'ios' : 'unknown'));
-        
-        // Use a dummy hardware fingerprint for now, in a real app use device_info_plus
         String hardwareFingerprint = 'device_${platform}_fingerprint_stub';
 
         final response = await _dio.post('/enroll', data: {
@@ -38,18 +36,35 @@ class EnrollmentRepository {
           throw Exception('Failed to enroll: ${response.statusCode}');
         }
       } on DioException catch (e) {
-        if (e.type == DioExceptionType.connectionTimeout || 
-            e.type == DioExceptionType.receiveTimeout || 
-            e.type == DioExceptionType.unknown) {
-          if (retryCount == maxRetries) {
-            throw Exception('Network error during enrollment after $maxRetries retries.');
-          }
+        bool shouldRetry = false;
+        
+        // Retry only on connection errors, timeout errors, or 5xx server errors.
+        // Do not retry on client-side errors (4xx) like invalid/expired token.
+        if (e.response == null) {
+          shouldRetry = true;
+        } else if (e.response!.statusCode != null && e.response!.statusCode! >= 500) {
+          shouldRetry = true;
+        }
+
+        if (shouldRetry && retryCount < maxRetries) {
           retryCount++;
           await Future.delayed(Duration(seconds: delay));
           delay *= 2; // Exponential backoff
         } else {
-          throw Exception('Enrollment failed: ${e.message}');
+          // If we have a response, try to extract the specific error message
+          if (e.response != null && e.response!.data != null && e.response!.data is Map) {
+            final data = e.response!.data as Map;
+            if (data.containsKey('error')) {
+              throw Exception(data['error']);
+            }
+            if (data.containsKey('message')) {
+              throw Exception(data['message']);
+            }
+          }
+          throw Exception(e.message ?? 'Network error during enrollment');
         }
+      } catch (e) {
+        throw Exception('An unexpected error occurred: $e');
       }
     }
   }

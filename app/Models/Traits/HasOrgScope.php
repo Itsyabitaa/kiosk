@@ -14,8 +14,8 @@ trait HasOrgScope
         static::addGlobalScope(new OrgScope);
 
         static::creating(function ($model) {
-            if (empty($model->org_id) && auth()->check()) {
-                $model->org_id = auth()->user()->org_id;
+            if (empty($model->org_id) && auth('api')->check()) {
+                $model->org_id = auth('api')->user()->org_id;
             }
         });
     }

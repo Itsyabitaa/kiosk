@@ -1,0 +1,89 @@
+name: Flutter CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  flutter-ci:
+    name: Flutter CI (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: kiosklock_agent
+    strategy:
+      matrix:
+        target: [analyze-test, android, ios]
+        include:
+          - target: analyze-test
+            os: ubuntu-latest
+          - target: android
+            os: ubuntu-latest
+          - target: ios
+            os: macos-latest
+      fail-fast: false
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Java
+      if: matrix.target == 'android' || matrix.target == 'analyze-test'
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+        cache-key: "flutter-:os:-:channel:-:version:-:arch:-:hash:"
+
+    # Cache Gradle dependencies for Android build
+    - name: Cache Gradle
+      if: matrix.target == 'android'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('kiosklock_agent/pubspec.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+
+    # Cache CocoaPods for iOS build
+    - name: Cache CocoaPods
+      if: matrix.target == 'ios'
+      uses: actions/cache@v4
+      with:
+        path: |
+          kiosklock_agent/ios/Pods
+          ~/Library/Caches/CocoaPods
+        key: ${{ runner.os }}-pods-${{ hashFiles('kiosklock_agent/pubspec.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pods-
+
+    - name: Install dependencies
+      run: flutter pub get
+
+    - name: Run Flutter Analyze
+      if: matrix.target == 'analyze-test'
+      run: flutter analyze
+
+    - name: Run Flutter Tests
+      if: matrix.target == 'analyze-test'
+      run: flutter test
+
+    - name: Build Android Debug APK
+      if: matrix.target == 'android'
+      run: flutter build apk --debug
+
+    - name: Build iOS Debug IPA (no-codesign)
+      if: matrix.target == 'ios'
+      run: flutter build ios --debug --no-codesign

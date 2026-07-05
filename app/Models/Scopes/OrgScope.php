@@ -13,8 +13,8 @@ class OrgScope implements Scope
      */
     public function apply(Builder $builder, Model $model): void
     {
-        if (auth()->check() && auth()->user()->org_id) {
-            $builder->where($model->getTable() . '.org_id', auth()->user()->org_id);
+        if (auth('api')->check() && auth('api')->user()->org_id) {
+            $builder->where($model->getTable() . '.org_id', auth('api')->user()->org_id);
         }
     }
 }
